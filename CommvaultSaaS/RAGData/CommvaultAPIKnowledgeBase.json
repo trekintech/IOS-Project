@@ -1,0 +1,133 @@
+{
+  "version": "SP42",
+  "lastUpdated": "2025-02-01",
+  "source": "https://api.commvault.com and https://documentation.commvault.com",
+  "sections": [
+    {
+      "topic": "Authentication",
+      "category": "core",
+      "content": "Commvault SaaS uses two authentication methods: (1) API Key / Access Token - recommended for programmatic access. Create tokens via POST /ApiToken with tokenName, tokenType (ALL, DEFAULT, CUSTOM), and expiry settings. Include token in 'Authtoken' header or 'Authorization: Bearer <token>' header. (2) Username/Password login via POST /Login which returns an authToken (JWT for SaaS). Tokens can be renewed via POST /ApiToken/Renew. List tokens with GET /ApiToken?userId={id}. Delete with DELETE /ApiToken/{tokenId}.",
+      "endpoints": [
+        {"method": "POST", "path": "/Login", "description": "Authenticate with username/password"},
+        {"method": "GET", "path": "/ApiToken", "description": "List access tokens for a user"},
+        {"method": "POST", "path": "/ApiToken", "description": "Create a new access token"},
+        {"method": "DELETE", "path": "/ApiToken/{tokenId}", "description": "Delete an access token"},
+        {"method": "POST", "path": "/ApiToken/Renew", "description": "Renew an expired token"},
+        {"method": "POST", "path": "/Logout", "description": "Invalidate current session"}
+      ],
+      "keywords": ["login", "authenticate", "token", "api key", "bearer", "authtoken", "session", "credentials", "access", "security"]
+    },
+    {
+      "topic": "Dashboard & Health",
+      "category": "monitoring",
+      "content": "Dashboard operations provide real-time visibility into environment health. GET /CommServ/CommCellInfo returns commcell name, version, release, and ID. GET /DashboardTile/HealthOverview?parameter.commUniId={id} shows health status counts across data sources categorized as Good, Info, Warning, or Critical. For single CommCell environments, commUniId is 10000; otherwise retrieve it via GET /DashboardTile/MetricsCommUniId. GET /DashboardTile/SLA returns SLA compliance details. GET /DashboardTile/StorageSpace shows storage utilization. GET /DashboardTile/AnomalousEntities lists entities with suspicious activity (ransomware indicators). GET /DashboardTile/JobsInLast24Hours provides job status summary. GET /DashboardTile/TopFiveServers shows the 5 largest protected servers.",
+      "endpoints": [
+        {"method": "GET", "path": "/CommServ/CommCellInfo", "description": "Get CommCell details (name, version, ID)"},
+        {"method": "GET", "path": "/DashboardTile/HealthOverview", "description": "Health status overview with Good/Info/Warning/Critical counts"},
+        {"method": "GET", "path": "/Client/Count", "description": "Get entity counts (clients, agents)"},
+        {"method": "GET", "path": "/DashboardTile/SLA", "description": "Get SLA compliance details"},
+        {"method": "GET", "path": "/DashboardTile/StorageSpace", "description": "Get storage space utilization"},
+        {"method": "GET", "path": "/DashboardTile/AnomalousEntities", "description": "Get entities with anomalous behavior"},
+        {"method": "GET", "path": "/DashboardTile/JobsInLast24Hours", "description": "Job summary for last 24 hours"},
+        {"method": "GET", "path": "/DashboardTile/TopFiveServers", "description": "Top 5 largest protected servers"},
+        {"method": "GET", "path": "/DashboardTile/EnvironmentDetails", "description": "Full environment details"},
+        {"method": "GET", "path": "/DashboardTile/MetricsCommUniId", "description": "Get metrics CommCell unique ID"},
+        {"method": "GET", "path": "/DashboardTile/HyperScaleStoragePool", "description": "HyperScale storage pool dashboard"}
+      ],
+      "keywords": ["dashboard", "health", "overview", "commcell", "sla", "storage", "anomalous", "ransomware", "servers", "environment", "capacity"]
+    },
+    {
+      "topic": "Job Operations",
+      "category": "core",
+      "content": "Jobs represent backup, restore, and administrative operations. GET /Job returns a list with filters for clientId, status, and lookupTime (seconds). Each job has jobId, status, jobType, percentComplete, subclient info, start/end times, and failure reasons. GET /Job/{jobId} returns full details including progress info (percentComplete, totalItems, failedItems). POST /Job/{jobId}/Action/Resubmit resubmits failed jobs. POST /Job/{jobId}/Action/Kill terminates running jobs. POST /Job/{jobId}/Action/Suspend pauses jobs. POST /Job/{jobId}/Action/Resume resumes suspended jobs. GET /Job/{jobId}/FailedItems lists items that failed within a job. Job statuses include: Completed, Failed, Running, Pending, Waiting, Killed, Suspended, CompletedWithErrors.",
+      "endpoints": [
+        {"method": "GET", "path": "/Job", "description": "List jobs with filters (clientId, status, lookupTime, limit)"},
+        {"method": "POST", "path": "/Job", "description": "Get backup job summary (POST variant)"},
+        {"method": "GET", "path": "/Job/{jobId}", "description": "Get full job details"},
+        {"method": "GET", "path": "/Job/{jobId}/Summary", "description": "Get job summary"},
+        {"method": "GET", "path": "/Job/{jobId}/FailedItems", "description": "Get failed items in a job"},
+        {"method": "POST", "path": "/Job/{jobId}/Action/Resubmit", "description": "Resubmit a failed job"},
+        {"method": "POST", "path": "/Job/{jobId}/Action/Kill", "description": "Kill a running job"},
+        {"method": "POST", "path": "/Job/{jobId}/Action/Suspend", "description": "Suspend a running job"},
+        {"method": "POST", "path": "/Job/{jobId}/Action/Resume", "description": "Resume a suspended job"}
+      ],
+      "keywords": ["job", "backup", "restore", "failed", "running", "pending", "kill", "suspend", "resume", "resubmit", "status", "progress"]
+    },
+    {
+      "topic": "Alerts & Monitoring",
+      "category": "monitoring",
+      "content": "Alerts provide proactive notification of issues. GET /AlertRule/Triggered returns triggered alerts with totalCount, unreadCount, and alert details including severity (1=Info, 2=Warning, 4=Critical), type, description, timestamp, client info, and job association. Alerts can be managed: POST /AlertRule/Triggered/{id}/Read marks as read. Alert definitions control what triggers alerts - GET /AlertRule lists definitions, POST /AlertRule creates new rules, and rules can be enabled/disabled. Console alerts are a separate system accessible via GET /Alert. Security alerts are under GET /DashboardTile/SecurityIQ.",
+      "endpoints": [
+        {"method": "GET", "path": "/AlertRule/Triggered", "description": "Get triggered alerts with severity and details"},
+        {"method": "POST", "path": "/AlertRule/Triggered/{alertId}/Read", "description": "Mark alert as read"},
+        {"method": "GET", "path": "/AlertRule", "description": "Get alert rule definitions"},
+        {"method": "POST", "path": "/AlertRule", "description": "Create new alert rule"},
+        {"method": "PUT", "path": "/AlertRule/{ruleId}", "description": "Modify alert rule"},
+        {"method": "DELETE", "path": "/AlertRule/{ruleId}", "description": "Delete alert rule"},
+        {"method": "GET", "path": "/Alert", "description": "Get console alerts"}
+      ],
+      "keywords": ["alert", "notification", "warning", "critical", "severity", "triggered", "monitoring", "rule", "security"]
+    },
+    {
+      "topic": "SaaS / Metallic Usage",
+      "category": "saas",
+      "content": "Metallic (Commvault Cloud) SaaS-specific endpoints provide subscription and usage management. GET /Metallic/Usage/Summary returns active subscriptions with peak usage per offering including offeringName, subscriptionType, contractType, entitledQuantity, consumedQuantity, unitOfMeasurement, and date ranges. GET /Metallic/Usage/Details provides granular usage data. GET /Metallic/AzureDB/Storage returns Azure database storage metrics. SaaS environments are accessed via ring-based URLs in the format https://M{nn}.metallic.io where nn is 2-3 digits (e.g., M88, M123). Each customer is assigned to a specific ring. The Command Center is at https://M{nn}.metallic.io/commandcenter/.",
+      "endpoints": [
+        {"method": "GET", "path": "/Metallic/Usage/Summary", "description": "Get tenant usage summary with subscription details"},
+        {"method": "GET", "path": "/Metallic/Usage/Details", "description": "Get detailed usage metrics"},
+        {"method": "GET", "path": "/Metallic/AzureDB/Storage", "description": "Get Azure DB storage metrics"}
+      ],
+      "keywords": ["metallic", "saas", "cloud", "usage", "subscription", "tenant", "ring", "consumption", "license", "offering"]
+    },
+    {
+      "topic": "Reports",
+      "category": "reporting",
+      "content": "Report endpoints provide analytics and data exports. GET /DashboardTile/CurrentCapacity returns current storage capacity report data. Reports can be customized with date ranges and filters. The reporting framework supports scheduled report generation and delivery. Custom reports can be created for specific monitoring needs. SaaS environments support cloud-optimized reporting with tenant-level isolation.",
+      "endpoints": [
+        {"method": "GET", "path": "/DashboardTile/CurrentCapacity", "description": "Get current capacity report"}
+      ],
+      "keywords": ["report", "analytics", "capacity", "export", "schedule", "data"]
+    },
+    {
+      "topic": "Security Operations",
+      "category": "security",
+      "content": "Security endpoints manage cyber resilience and access control. POST /CyberResilience/Configure sets up cyber resilience features. GET /AccessControl retrieves access control settings. Security IQ dashboard provides security posture overview. Anomalous entity detection identifies potential ransomware or insider threats. The platform supports role-based access control (RBAC), multi-factor authentication (MFA), and audit logging.",
+      "endpoints": [
+        {"method": "POST", "path": "/CyberResilience/Configure", "description": "Configure cyber resilience"},
+        {"method": "GET", "path": "/AccessControl", "description": "Get access control settings"}
+      ],
+      "keywords": ["security", "cyber", "resilience", "access", "control", "ransomware", "rbac", "audit", "mfa"]
+    },
+    {
+      "topic": "Storage Management",
+      "category": "core",
+      "content": "Storage endpoints manage backup storage infrastructure. Cloud storage libraries are the primary storage target for SaaS. GET /Metallic/AzureDB/Storage returns cloud storage metrics. Storage policies define retention, deduplication, and encryption settings. SaaS environments leverage Commvault-managed cloud storage with automatic tiering and lifecycle management.",
+      "endpoints": [
+        {"method": "GET", "path": "/Metallic/AzureDB/Storage", "description": "Get Azure DB storage information"}
+      ],
+      "keywords": ["storage", "library", "cloud", "retention", "deduplication", "encryption", "tiering"]
+    },
+    {
+      "topic": "Workflow Operations",
+      "category": "automation",
+      "content": "Workflows automate complex multi-step operations. GET /Workflow returns all configured workflows. Workflows can be triggered manually or on schedules. They support conditional logic, parallel execution, and error handling. Common workflows include automated disaster recovery testing, compliance reporting, and data lifecycle management.",
+      "endpoints": [
+        {"method": "GET", "path": "/Workflow", "description": "List all workflows"},
+        {"method": "POST", "path": "/Workflow/{workflowId}/Action/Execute", "description": "Execute a workflow"}
+      ],
+      "keywords": ["workflow", "automation", "orchestration", "schedule", "execute", "disaster recovery"]
+    },
+    {
+      "topic": "SaaS Platform Architecture",
+      "category": "saas",
+      "content": "Commvault Cloud (formerly Metallic) is a SaaS backup platform. Customers connect via ring-based endpoints: https://M{nn}.metallic.io where {nn} is 2-3 digits. Each ring hosts multiple tenants. The Command Center web UI is at /commandcenter/ and API base is /commandcenter/api/. SaaS Connectors bridge customer on-premises infrastructure to the cloud service - they handle data movement and metadata. Key SaaS workloads include Microsoft 365 (Exchange, OneDrive, SharePoint, Teams), Azure VMs, Azure SQL, AWS EC2, AWS RDS, VMware, Hyper-V, Kubernetes, SAP HANA, Oracle, SQL Server, NAS, and Physical Servers. The platform provides multi-tenant isolation, automatic updates, built-in ransomware detection, and compliance controls.",
+      "keywords": ["architecture", "ring", "metallic", "saas", "connector", "tenant", "workload", "microsoft 365", "azure", "aws", "vmware"]
+    },
+    {
+      "topic": "Commvault SaaS Documentation",
+      "category": "documentation",
+      "content": "The Commvault SaaS documentation covers: Command Center procedures for managing backup operations through the web UI, Core features including backup, restore, and monitoring, HyperScale appliance documentation, Developer resources including REST API guides, and Multi-tenant configuration for enterprise deployments. Key SaaS features include: automated data protection across cloud and on-premises workloads, cyber resilience with anomaly detection and threat scanning, cloud-native backup for M365/Azure/AWS, SaaS Connector deployment and management, and compliance reporting. The documentation is organized by feature area and workload type. SP42 is the latest version. API documentation is at api.commvault.com and product docs at documentation.commvault.com.",
+      "keywords": ["documentation", "guide", "help", "command center", "features", "saas", "cloud", "backup"]
+    }
+  ]
+}

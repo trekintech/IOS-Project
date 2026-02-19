@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.commvault.saas.jobcheck</string>
+        <string>com.commvault.saas.morningdigest</string>
+        <string>com.commvault.saas.cohesitycheck</string>
+    </array>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>processing</string>
+    </array>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>metallic.io</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSExceptionRequiresForwardSecrecy</key>
+                <true/>
+                <key>NSExceptionMinimumTLSVersion</key>
+                <string>TLSv1.2</string>
+            </dict>
+            <key>cohesity.com</key>
+            <dict>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+                <key>NSExceptionRequiresForwardSecrecy</key>
+                <true/>
+                <key>NSExceptionMinimumTLSVersion</key>
+                <string>TLSv1.2</string>
+            </dict>
+        </dict>
+    </dict>
+    <key>CFBundleDisplayName</key>
+    <string>CV Cloud</string>
+    <key>CFBundleName</key>
+    <string>CommvaultSaaS</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+</dict>
+</plist>
