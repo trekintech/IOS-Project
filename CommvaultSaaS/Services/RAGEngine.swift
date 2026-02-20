@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import NaturalLanguage
 
 /// Local Retrieval-Augmented Generation engine for answering questions about

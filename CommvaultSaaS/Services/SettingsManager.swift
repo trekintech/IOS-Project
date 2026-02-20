@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SwiftUI
 
 /// Manages user preferences and app settings with UserDefaults persistence.

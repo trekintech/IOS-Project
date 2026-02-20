@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SwiftUI
 
 /// Manages authentication state, secure API token storage, and ring configuration.
