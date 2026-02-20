@@ -128,7 +128,6 @@ final class RAGEngine: ObservableObject {
 
         for (docIndex, section) in knowledgeBase.enumerated() {
             var score: Double = 0
-            let docTokenSet = Set(section.tokens.map { $0.lowercased() })
             let docLength = Double(max(section.tokens.count, 1))
 
             for term in allQueryTerms {
