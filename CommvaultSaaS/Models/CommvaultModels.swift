@@ -5,6 +5,12 @@ import Foundation
 struct LoginResponse: Codable {
     let token: String?
     let authToken: String?
+    let userName: String?
+    let userGUID: String?
+    let aliasName: String?
+    let ccn: Int?
+    let forcePasswordChange: Bool?
+    let isAccountLocked: Bool?
     let errList: [APIError]?
 
     var effectiveToken: String? {
@@ -15,6 +21,18 @@ struct LoginResponse: Codable {
 struct APIError: Codable {
     let errorCode: Int?
     let errorMessage: String?
+}
+
+/// Response from POST /V4/AccessToken/Renew
+struct TokenRenewResponse: Codable {
+    let accessToken: String?
+    let refreshToken: String?
+}
+
+/// Request body for POST /V4/AccessToken/Renew
+struct TokenRenewRequest: Codable {
+    let accessToken: String
+    let refreshToken: String
 }
 
 // MARK: - CommCell Details

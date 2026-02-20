@@ -8,6 +8,7 @@ final class KeychainManager {
 
     enum KeychainKey: String {
         case apiToken = "com.commvault.saas.apiToken"
+        case refreshToken = "com.commvault.saas.refreshToken"
         case ringEndpoint = "com.commvault.saas.ringEndpoint"
         case username = "com.commvault.saas.username"
     }
@@ -65,7 +66,7 @@ final class KeychainManager {
     }
 
     func deleteAll() {
-        for key in [KeychainKey.apiToken, .ringEndpoint, .username] {
+        for key in [KeychainKey.apiToken, .refreshToken, .ringEndpoint, .username] {
             delete(for: key)
         }
     }

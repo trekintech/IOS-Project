@@ -23,11 +23,13 @@ actor CommvaultAPIService {
     // MARK: - Authentication Operations
 
     /// Login and retrieve auth token. For SaaS, use API key as bearer token.
+    /// Note: Commvault requires the password to be Base64 UTF-8 encoded.
     func login(ring: String, username: String, password: String) async throws -> LoginResponse {
         let url = "https://\(ring).metallic.io/commandcenter/api/Login"
+        let base64Password = Data(password.utf8).base64EncodedString()
         let body: [String: Any] = [
             "username": username,
-            "password": password,
+            "password": base64Password,
         ]
         return try await post(url: url, body: body, authenticated: false)
     }
@@ -189,6 +191,31 @@ actor CommvaultAPIService {
     /// Get detailed usage
     func getUsageDetails() async throws -> Data {
         return try await getRaw(endpoint: "/Metallic/Usage/Details")
+    }
+
+    // MARK: - Token Renewal
+
+    /// Renew an expired access token using a refresh token.
+    /// Returns a new access/refresh token pair.
+    func renewAccessToken(accessToken: String, refreshToken: String) async throws -> TokenRenewResponse {
+        let url = baseURL + "/V4/AccessToken/Renew"
+        guard let requestURL = URL(string: url) else {
+            throw CommvaultAPIError.invalidURL(url)
+        }
+
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+
+        let body = TokenRenewRequest(accessToken: accessToken, refreshToken: refreshToken)
+        request.httpBody = try JSONEncoder().encode(body)
+        request.timeoutInterval = 30
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+        return try JSONDecoder().decode(TokenRenewResponse.self, from: data)
     }
 
     // MARK: - Reports

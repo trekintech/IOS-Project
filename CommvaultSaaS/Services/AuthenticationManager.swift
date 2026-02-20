@@ -18,7 +18,8 @@ final class AuthenticationManager: ObservableObject {
         restoreSession()
     }
 
-    /// Restore a previous session from Keychain
+    /// Restore a previous session from Keychain.
+    /// If the token is expired, attempt renewal with the stored refresh token.
     private func restoreSession() {
         guard let token = keychain.retrieve(for: .apiToken),
               let ring = keychain.retrieve(for: .ringEndpoint) else {
@@ -31,10 +32,48 @@ final class AuthenticationManager: ObservableObject {
                 let details = try await api.validateToken()
                 self.commCellDetails = details
                 self.isAuthenticated = true
+            } catch CommvaultAPIError.unauthorized {
+                // Token expired - try refreshing
+                if await refreshTokenIfPossible() {
+                    do {
+                        let details = try await api.validateToken()
+                        self.commCellDetails = details
+                        self.isAuthenticated = true
+                    } catch {
+                        self.isAuthenticated = false
+                    }
+                } else {
+                    self.isAuthenticated = false
+                }
             } catch {
-                // Token expired or invalid - require re-login
                 self.isAuthenticated = false
             }
+        }
+    }
+
+    /// Attempt to renew the access token using the stored refresh token.
+    /// Returns true if renewal succeeded.
+    func refreshTokenIfPossible() async -> Bool {
+        guard let currentToken = keychain.retrieve(for: .apiToken),
+              let refreshToken = keychain.retrieve(for: .refreshToken) else {
+            return false
+        }
+
+        do {
+            let response = try await api.renewAccessToken(
+                accessToken: currentToken,
+                refreshToken: refreshToken
+            )
+            guard let newAccess = response.accessToken,
+                  let newRefresh = response.refreshToken else {
+                return false
+            }
+            await api.updateToken(newAccess)
+            try keychain.save(newAccess, for: .apiToken)
+            try keychain.save(newRefresh, for: .refreshToken)
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -80,12 +119,29 @@ final class AuthenticationManager: ObservableObject {
 
         do {
             let response = try await api.login(ring: normalizedRing, username: username, password: password)
+
+            // Check for API-level errors first
+            if let firstError = response.errList?.first,
+               let code = firstError.errorCode, code != 0 {
+                errorMessage = firstError.errorMessage ?? "Login failed (error \(code))."
+                isLoading = false
+                return
+            }
+
             guard let token = response.effectiveToken else {
-                if let errMsg = response.errList?.first?.errorMessage {
-                    errorMessage = errMsg
-                } else {
-                    errorMessage = "Login failed. No token received."
-                }
+                errorMessage = "Login failed. No token received."
+                isLoading = false
+                return
+            }
+
+            if response.forcePasswordChange == true {
+                errorMessage = "Your password must be changed. Please update it in the Command Center first."
+                isLoading = false
+                return
+            }
+
+            if response.isAccountLocked == true {
+                errorMessage = "This account is locked. Contact your administrator."
                 isLoading = false
                 return
             }
