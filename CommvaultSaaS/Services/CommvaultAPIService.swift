@@ -1,12 +1,12 @@
 import Foundation
 
 /// Core service for all Commvault REST API interactions.
-/// SaaS API calls go through the unified gateway: https://api.metallic.io/commandcenter/api/...
+/// SaaS API calls go through the unified gateway: https://api.metallic.io/...
 /// The access token carries tenant/ring routing information.
 actor CommvaultAPIService {
     static let shared = CommvaultAPIService()
 
-    private static let saasBaseURL = "https://api.metallic.io/commandcenter/api"
+    private static let saasBaseURL = "https://api.metallic.io"
 
     private var baseURL: String = ""
     private var authToken: String = ""
