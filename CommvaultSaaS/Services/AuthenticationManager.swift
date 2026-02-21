@@ -21,13 +21,12 @@ final class AuthenticationManager: ObservableObject {
     /// Restore a previous session from Keychain.
     /// If the token is expired, attempt renewal with the stored refresh token.
     private func restoreSession() {
-        guard let token = keychain.retrieve(for: .apiToken),
-              let ring = keychain.retrieve(for: .ringEndpoint) else {
+        guard let token = keychain.retrieve(for: .apiToken) else {
             return
         }
-        ringIdentifier = ring
+        ringIdentifier = keychain.retrieve(for: .ringEndpoint) ?? ""
         Task {
-            await api.configure(ring: ring, token: token)
+            await api.configure(ring: "", token: token)
             do {
                 let details = try await api.validateToken()
                 self.commCellDetails = details
@@ -77,26 +76,19 @@ final class AuthenticationManager: ObservableObject {
         }
     }
 
-    /// Authenticate with an API key (recommended for SaaS)
-    func loginWithAPIKey(ring: String, apiKey: String) async {
+    /// Authenticate with an API key (recommended for SaaS).
+    /// The unified gateway at api.metallic.io routes based on the token,
+    /// so no ring input is needed.
+    func loginWithAPIKey(apiKey: String) async {
         isLoading = true
         errorMessage = nil
 
-        let normalizedRing = normalizeRing(ring)
-        guard isValidRing(normalizedRing) else {
-            errorMessage = "Invalid ring format. Expected format: M## (e.g., M88, M123)"
-            isLoading = false
-            return
-        }
-
-        await api.configure(ring: normalizedRing, token: apiKey)
+        await api.configure(ring: "", token: apiKey)
 
         do {
             let details = try await api.validateToken()
             try keychain.save(apiKey, for: .apiToken)
-            try keychain.save(normalizedRing, for: .ringEndpoint)
             self.commCellDetails = details
-            self.ringIdentifier = normalizedRing
             self.isAuthenticated = true
         } catch CommvaultAPIError.forbidden {
             errorMessage = "Access denied. Ensure the API key was created with scope 'All' and has not expired. You can verify in Command Center under Manage > Security > Access Tokens."

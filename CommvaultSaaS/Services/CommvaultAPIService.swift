@@ -1,10 +1,12 @@
 import Foundation
 
 /// Core service for all Commvault REST API interactions.
-/// Endpoints follow the pattern: https://{ring}.metallic.io/commandcenter/api/...
-/// Ring format: M## or M### (e.g., M88, M123)
+/// SaaS API calls go through the unified gateway: https://api.metallic.io/commandcenter/api/...
+/// The access token carries tenant/ring routing information.
 actor CommvaultAPIService {
     static let shared = CommvaultAPIService()
+
+    private static let saasBaseURL = "https://api.metallic.io/commandcenter/api"
 
     private var baseURL: String = ""
     private var authToken: String = ""
@@ -12,7 +14,7 @@ actor CommvaultAPIService {
     // MARK: - Configuration
 
     func configure(ring: String, token: String) {
-        self.baseURL = "https://\(ring).metallic.io/commandcenter/api"
+        self.baseURL = Self.saasBaseURL
         self.authToken = token
     }
 
@@ -22,8 +24,9 @@ actor CommvaultAPIService {
 
     // MARK: - Authentication Operations
 
-    /// Login and retrieve auth token. For SaaS, use API key as bearer token.
+    /// Login and retrieve auth token via the ring-specific Command Center.
     /// Note: Commvault requires the password to be Base64 UTF-8 encoded.
+    /// This calls the ring-specific URL since the user doesn't have a token yet.
     func login(ring: String, username: String, password: String) async throws -> LoginResponse {
         let url = "https://\(ring).metallic.io/commandcenter/api/Login"
         let base64Password = Data(password.utf8).base64EncodedString()

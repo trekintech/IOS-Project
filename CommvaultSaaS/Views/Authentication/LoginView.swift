@@ -38,33 +38,6 @@ struct LoginView: View {
 
                     // Login Card
                     VStack(spacing: 20) {
-                        // Ring Input
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("Ring Endpoint", systemImage: "globe")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            HStack {
-                                TextField("M88", text: $ring)
-                                    .textInputAutocapitalization(.characters)
-                                    .autocorrectionDisabled()
-                                    .font(.body.monospaced())
-
-                                Text(".metallic.io")
-                                    .font(.body.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                            if !ring.isEmpty && !authManager.isValidRing(ring.uppercased()) {
-                                Text("Format: M followed by 2-3 digits (e.g., M88, M123)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.red)
-                            }
-                        }
-
                         // Auth Method Toggle
                         Picker("Auth Method", selection: $useCredentials) {
                             Text("API Key").tag(false)
@@ -73,6 +46,32 @@ struct LoginView: View {
                         .pickerStyle(.segmented)
 
                         if useCredentials {
+                            // Ring Input (needed for credential login to target the specific ring)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Label("Ring Endpoint", systemImage: "globe")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                HStack {
+                                    TextField("M88", text: $ring)
+                                        .textInputAutocapitalization(.characters)
+                                        .autocorrectionDisabled()
+                                        .font(.body.monospaced())
+
+                                    Text(".metallic.io")
+                                        .font(.body.monospaced())
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                if !ring.isEmpty && !authManager.isValidRing(ring.uppercased()) {
+                                    Text("Format: M followed by 2-3 digits (e.g., M88, M123)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.red)
+                                }
+                            }
                             // 2FA Warning
                             HStack(spacing: 8) {
                                 Image(systemName: "exclamationmark.shield.fill")
@@ -162,7 +161,6 @@ struct LoginView: View {
                                     )
                                 } else {
                                     await authManager.loginWithAPIKey(
-                                        ring: ring,
                                         apiKey: apiKey
                                     )
                                 }
@@ -215,11 +213,11 @@ struct LoginView: View {
     }
 
     private var isFormValid: Bool {
-        let ringValid = authManager.isValidRing(ring.uppercased())
         if useCredentials {
+            let ringValid = authManager.isValidRing(ring.uppercased())
             return ringValid && !username.isEmpty && !password.isEmpty
         } else {
-            return ringValid && !apiKey.isEmpty
+            return !apiKey.isEmpty
         }
     }
 }
@@ -263,7 +261,7 @@ struct APIKeyInfoSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         BulletPoint(text: "Your API key is stored exclusively in the iOS Keychain with hardware-level encryption")
                         BulletPoint(text: "The key is only accessible when the device is unlocked")
-                        BulletPoint(text: "The key never leaves your device - all API calls are made directly to your Commvault ring")
+                        BulletPoint(text: "The key never leaves your device - all API calls go through the secure Commvault Cloud gateway")
                         BulletPoint(text: "You can revoke the token at any time from the Command Center")
                     }
                 }
