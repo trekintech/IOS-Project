@@ -75,6 +75,12 @@ actor CommvaultAPIService {
         let (data, response) = try await URLSession.shared.data(for: request)
         try validateResponse(response)
         lastCallTime = Date()
+
+        // Debug: dump raw JSON so we can verify field names
+        if let raw = String(data: data, encoding: .utf8) {
+            print("[API DEBUG] Raw response for \(endpoint):\n\(raw)")
+        }
+
         return try JSONDecoder().decode(T.self, from: data)
     }
 

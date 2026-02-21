@@ -53,15 +53,24 @@ struct CommvaultUser: Codable, Identifiable {
         company = try container.decodeIfPresent(CompanyInfo.self, forKey: .company)
         GUID = try container.decodeIfPresent(String.self, forKey: .GUID)
 
+        // Debug: check what keys are actually in the JSON for this user
+        let hasKey = container.contains(.lastLoggedIn)
+        let userName = try container.decodeIfPresent(String.self, forKey: .name) ?? "?"
+        print("[DECODE DEBUG] User '\(userName)' — lastLoggedIn key present: \(hasKey)")
+
         // Flexible decoding: API may return Int, Double, or String for timestamps
         if let intVal = try? container.decodeIfPresent(Int.self, forKey: .lastLoggedIn) {
+            print("[DECODE DEBUG]   → decoded as Int: \(intVal)")
             lastLoggedIn = TimeInterval(intVal)
         } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .lastLoggedIn) {
+            print("[DECODE DEBUG]   → decoded as Double: \(doubleVal)")
             lastLoggedIn = doubleVal
         } else if let strVal = try? container.decodeIfPresent(String.self, forKey: .lastLoggedIn),
                   let parsed = Double(strVal) {
+            print("[DECODE DEBUG]   → decoded as String→Double: \(parsed)")
             lastLoggedIn = parsed
         } else {
+            print("[DECODE DEBUG]   → could not decode, setting nil")
             lastLoggedIn = nil
         }
     }
