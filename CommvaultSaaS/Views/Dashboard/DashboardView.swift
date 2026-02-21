@@ -44,7 +44,7 @@ struct DashboardView: View {
                     }
 
                     if !viewModel.isLoading {
-                        // Total Users Card
+                        // Total Users
                         NavigationLink {
                             UserListView(
                                 title: "All Users",
@@ -64,7 +64,28 @@ struct DashboardView: View {
                             )
                         }
 
-                        // Inactive 1+ Year Card
+                        // Inactive 6+ Months
+                        NavigationLink {
+                            UserListView(
+                                title: "Inactive 6+ Months",
+                                users: viewModel.inactiveSixMonthUsers
+                            )
+                        } label: {
+                            StatCard(
+                                icon: "clock.badge.questionmark",
+                                title: "Inactive 6+ Months",
+                                count: viewModel.inactiveSixMonthCount,
+                                subtitle: "Last login over 6 months ago",
+                                color: .orange,
+                                gradient: LinearGradient(
+                                    colors: [Color(hex: "5C4B1E"), Color(hex: "B8860B")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        }
+
+                        // Inactive 1+ Year
                         NavigationLink {
                             UserListView(
                                 title: "Inactive 1+ Year",
@@ -85,7 +106,7 @@ struct DashboardView: View {
                             )
                         }
 
-                        // Never Logged In Card
+                        // Never Logged In
                         NavigationLink {
                             UserListView(
                                 title: "Never Logged In",
@@ -153,6 +174,11 @@ final class DashboardViewModel: ObservableObject {
     private let api = CommvaultAPIService.shared
 
     var totalUsers: Int { allUsers.count }
+
+    var inactiveSixMonthUsers: [CommvaultUser] {
+        allUsers.filter { $0.isInactiveSixMonths }
+    }
+    var inactiveSixMonthCount: Int { inactiveSixMonthUsers.count }
 
     var inactiveOneYearUsers: [CommvaultUser] {
         allUsers.filter { $0.isInactiveOneYear }
