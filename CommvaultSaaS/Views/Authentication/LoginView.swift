@@ -73,6 +73,18 @@ struct LoginView: View {
                         .pickerStyle(.segmented)
 
                         if useCredentials {
+                            // 2FA Warning
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.shield.fill")
+                                    .foregroundStyle(.orange)
+                                Text("Commvault Cloud requires 2FA. If enabled, password login will not work — use an API Key instead.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(10)
+                            .background(Color.orange.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+
                             // Username / Password
                             VStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 6) {
@@ -224,14 +236,24 @@ struct APIKeyInfoSheet: View {
                         .fontWeight(.bold)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        InfoStep(number: 1, text: "Log into your Commvault Command Center at https://M{ring}.metallic.io/commandcenter/")
-                        InfoStep(number: 2, text: "Navigate to your user profile (top-right menu)")
-                        InfoStep(number: 3, text: "Select 'API Tokens' or 'Access Tokens'")
-                        InfoStep(number: 4, text: "Click 'Create New Token'")
-                        InfoStep(number: 5, text: "Set the token type to 'ALL' for full API access")
-                        InfoStep(number: 6, text: "Set an appropriate expiry date")
-                        InfoStep(number: 7, text: "Copy the generated token and paste it here")
+                        InfoStep(number: 1, text: "Log into your Commvault Command Center")
+                        InfoStep(number: 2, text: "Go to Manage > Security > Users")
+                        InfoStep(number: 3, text: "Select the Access Tokens tab")
+                        InfoStep(number: 4, text: "Click 'Add Token' to create a new access token")
+                        InfoStep(number: 5, text: "Set the scope to 'All' for full API access")
+                        InfoStep(number: 6, text: "Copy both the access token and the refresh token")
+                        InfoStep(number: 7, text: "Paste the access token here as your API key")
                     }
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundStyle(.blue)
+                        Text("Access tokens expire after 30 minutes of inactivity but can be automatically renewed using the refresh token for up to 90 days.")
+                            .font(.caption)
+                    }
+                    .padding(10)
+                    .background(Color.blue.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     Divider()
 

@@ -241,7 +241,6 @@ actor CommvaultAPIService {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
-        request.addValue(authToken, forHTTPHeaderField: "Authtoken")
         request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 30
 
@@ -270,7 +269,6 @@ actor CommvaultAPIService {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         if authenticated {
-            request.addValue(authToken, forHTTPHeaderField: "Authtoken")
             request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

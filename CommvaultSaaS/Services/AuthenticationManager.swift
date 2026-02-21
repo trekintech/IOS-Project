@@ -98,6 +98,10 @@ final class AuthenticationManager: ObservableObject {
             self.commCellDetails = details
             self.ringIdentifier = normalizedRing
             self.isAuthenticated = true
+        } catch CommvaultAPIError.forbidden {
+            errorMessage = "Access denied. Ensure the API key was created with scope 'All' and has not expired. You can verify in Command Center under Manage > Security > Access Tokens."
+        } catch CommvaultAPIError.unauthorized {
+            errorMessage = "Invalid API key. Please check the key and try again."
         } catch {
             errorMessage = "Authentication failed: \(error.localizedDescription)"
         }
@@ -123,7 +127,12 @@ final class AuthenticationManager: ObservableObject {
             // Check for API-level errors first
             if let firstError = response.errList?.first,
                let code = firstError.errorCode, code != 0 {
-                errorMessage = firstError.errorMessage ?? "Login failed (error \(code))."
+                // Error 1134: 2FA/MFA is enforced — password login is blocked on SaaS
+                if code == 1134 {
+                    errorMessage = "Password login is not available when two-factor authentication (2FA) is enabled. Please use an API Key instead. You can generate one in Command Center under Manage > Security > Access Tokens."
+                } else {
+                    errorMessage = firstError.errorMessage ?? "Login failed (error \(code))."
+                }
                 isLoading = false
                 return
             }
