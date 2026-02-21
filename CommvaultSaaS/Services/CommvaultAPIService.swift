@@ -1,234 +1,44 @@
 import Foundation
 
-/// Core service for all Commvault REST API interactions.
-/// SaaS API calls go through the unified gateway: https://api.metallic.io/...
-///
-/// Two authentication modes:
-/// - **Access Token (Bearer)**: Created in Command Center under Manage > Security > Access Tokens.
-///   Use a service account for tokens that can be refreshed (30-min expiry, renewable within 14 days).
-///   Header: `Authorization: Bearer {token}`
-/// - **Session Login (QSDK)**: From POST /Login with username/password.
-///   Returns a QSDK session token (30-min expiry, not renewable via refresh tokens).
-///   Header: `Authorization: QSDK {token}` (token already includes prefix)
+/// Stripped-back API service for Commvault Cloud user management.
+/// All calls go directly to the ring: https://m036.metallic.io/commandcenter/api
+/// Auth: `Authtoken: {accessToken}`
 actor CommvaultAPIService {
     static let shared = CommvaultAPIService()
 
-    private static let saasBaseURL = "https://api.metallic.io"
+    private static let baseURL = "https://m036.metallic.io/commandcenter/api"
 
-    private var baseURL: String = ""
     private var authToken: String = ""
-
-    /// Whether the current token is a QSDK session token (from /Login)
-    /// vs a Bearer access token (from Command Center).
-    private var isQSDKToken: Bool = false
+    private var lastCallTime: Date?
 
     // MARK: - Configuration
 
-    func configure(ring: String, token: String) {
-        self.baseURL = Self.saasBaseURL
+    func configure(token: String) {
         self.authToken = token
-        self.isQSDKToken = token.hasPrefix("QSDK ")
+        self.lastCallTime = Date()
     }
 
     func updateToken(_ token: String) {
         self.authToken = token
-        self.isQSDKToken = token.hasPrefix("QSDK ")
+        self.lastCallTime = Date()
     }
 
-    /// Build the correct Authorization header value based on token type.
-    /// - Bearer access tokens: `Authorization: Bearer {token}`
-    /// - QSDK session tokens: `Authorization: QSDK {token}` (prefix already in token)
-    private var authorizationHeaderValue: String {
-        if isQSDKToken {
-            return authToken  // Already contains "QSDK " prefix
-        } else {
-            return "Bearer \(authToken)"
-        }
+    /// Whether the token likely needs renewal (> 2 hours since last call).
+    var needsTokenRenewal: Bool {
+        guard let last = lastCallTime else { return true }
+        return Date().timeIntervalSince(last) > 2 * 60 * 60
     }
 
-    // MARK: - Authentication Operations
+    // MARK: - Users
 
-    /// Login via POST https://api.metallic.io/Login
-    /// Note: Commvault requires the password to be Base64 UTF-8 encoded.
-    /// Returns a QSDK session token that expires in 30 minutes.
-    /// For longer-lived access, use a service account access token instead.
-    func login(ring: String, username: String, password: String) async throws -> LoginResponse {
-        let url = Self.saasBaseURL + "/Login"
-        let base64Password = Data(password.utf8).base64EncodedString()
-        let body: [String: Any] = [
-            "username": username,
-            "password": base64Password,
-        ]
-        return try await post(url: url, body: body, authenticated: false, extraHeaders: ["ring-id": ring])
-    }
-
-    /// Validate that an API token is working
-    func validateToken() async throws -> CommCellDetails {
-        return try await get(endpoint: "/CommServ/CommCellInfo")
-    }
-
-    /// Create a new access token
-    func createAccessToken(tokenName: String, expiryDays: Int = 365) async throws -> [String: Any] {
-        let body: [String: Any] = [
-            "tokenName": tokenName,
-            "tokenExpiry": [
-                "days": expiryDays
-            ],
-            "tokenType": "ALL"
-        ]
-        let data = try await postRaw(endpoint: "/ApiToken", body: body)
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw CommvaultAPIError.invalidResponse
-        }
-        return json
-    }
-
-    /// List existing access tokens
-    func listAccessTokens(userId: Int? = nil) async throws -> Data {
-        var endpoint = "/ApiToken"
-        if let userId = userId {
-            endpoint += "?userId=\(userId)"
-        }
-        return try await getRaw(endpoint: endpoint)
-    }
-
-    // MARK: - Dashboard Operations
-
-    /// Get CommCell details: name, version, release, ID
-    func getCommCellDetails() async throws -> CommCellDetails {
-        return try await get(endpoint: "/CommServ/CommCellInfo")
-    }
-
-    /// Get health overview for the environment
-    func getHealthOverview(commUniId: Int = 10000) async throws -> HealthOverviewResponse {
-        return try await get(endpoint: "/DashboardTile/HealthOverview?parameter.commUniId=\(commUniId)")
-    }
-
-    /// Get entity count (clients, agents, etc.)
-    func getEntityCount() async throws -> EntityCountResponse {
-        return try await get(endpoint: "/Client/Count")
-    }
-
-    /// Get SLA details
-    func getSLADetails() async throws -> SLAResponse {
-        return try await get(endpoint: "/DashboardTile/SLA")
-    }
-
-    /// Get storage space utilization
-    func getStorageUtilization() async throws -> StorageUtilizationResponse {
-        return try await get(endpoint: "/DashboardTile/StorageSpace")
-    }
-
-    /// Get anomalous entities
-    func getAnomalousEntities() async throws -> AnomalousEntitiesResponse {
-        return try await get(endpoint: "/DashboardTile/AnomalousEntities")
-    }
-
-    /// Get jobs summary for last 24 hours
-    func getJobs24Hours() async throws -> Jobs24HResponse {
-        return try await get(endpoint: "/DashboardTile/JobsInLast24Hours")
-    }
-
-    /// Get environment details
-    func getEnvironmentDetails() async throws -> Data {
-        return try await getRaw(endpoint: "/DashboardTile/EnvironmentDetails")
-    }
-
-    // MARK: - Job Operations
-
-    /// Get list of jobs, with optional filters
-    func getJobs(
-        clientId: Int? = nil,
-        jobFilter: JobFilter = .all,
-        limit: Int = 50,
-        lookupTime: Int = 86400  // last 24h in seconds
-    ) async throws -> JobListResponse {
-        var params = [
-            "limit": "\(limit)",
-            "lookupTime": "\(lookupTime)",
-        ]
-        if let clientId = clientId {
-            params["clientId"] = "\(clientId)"
-        }
-        if jobFilter != .all {
-            params["status"] = jobFilter.rawValue
-        }
-        let queryString = params.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
-        return try await get(endpoint: "/Job?\(queryString)")
-    }
-
-    /// Get detailed info for a specific job
-    func getJobDetails(jobId: Int) async throws -> JobDetailsResponse {
-        return try await get(endpoint: "/Job/\(jobId)")
-    }
-
-    /// Get job summary
-    func getJobSummary(jobId: Int) async throws -> Data {
-        return try await getRaw(endpoint: "/Job/\(jobId)/Summary")
-    }
-
-    /// Get failed items for a job
-    func getFailedItems(jobId: Int) async throws -> Data {
-        return try await getRaw(endpoint: "/Job/\(jobId)/FailedItems")
-    }
-
-    /// Resubmit a failed job
-    func resubmitJob(jobId: Int) async throws -> Data {
-        return try await postRaw(endpoint: "/Job/\(jobId)/Action/Resubmit", body: [:])
-    }
-
-    /// Kill a running job
-    func killJob(jobId: Int) async throws -> Data {
-        return try await postRaw(endpoint: "/Job/\(jobId)/Action/Kill", body: [:])
-    }
-
-    /// Suspend a job
-    func suspendJob(jobId: Int) async throws -> Data {
-        return try await postRaw(endpoint: "/Job/\(jobId)/Action/Suspend", body: [:])
-    }
-
-    /// Resume a job
-    func resumeJob(jobId: Int) async throws -> Data {
-        return try await postRaw(endpoint: "/Job/\(jobId)/Action/Resume", body: [:])
-    }
-
-    // MARK: - Monitoring / Alerts
-
-    /// Get triggered alerts
-    func getAlerts(pageSize: Int = 50, pageNo: Int = 1) async throws -> AlertsResponse {
-        return try await get(endpoint: "/AlertRule/Triggered?pageSize=\(pageSize)&pageNo=\(pageNo)")
-    }
-
-    /// Get alert definitions
-    func getAlertDefinitions() async throws -> Data {
-        return try await getRaw(endpoint: "/AlertRule")
-    }
-
-    /// Mark alert as read
-    func markAlertRead(alertId: Int) async throws -> Data {
-        return try await postRaw(endpoint: "/AlertRule/Triggered/\(alertId)/Read", body: [:])
-    }
-
-    // MARK: - Usage / Metallic (SaaS-specific)
-
-    /// Get tenant usage summary - SaaS subscriptions and consumption
-    func getUsageSummary() async throws -> UsageSummaryResponse {
-        return try await get(endpoint: "/Metallic/Usage/Summary")
-    }
-
-    /// Get detailed usage
-    func getUsageDetails() async throws -> Data {
-        return try await getRaw(endpoint: "/Metallic/Usage/Details")
+    func getUsers(limit: Int = 1000) async throws -> UsersResponse {
+        return try await get(endpoint: "/v4/user?limit=\(limit)")
     }
 
     // MARK: - Token Renewal
 
-    /// Renew an expired Bearer access token using a refresh token.
-    /// Per Commvault docs: tokens expire after 30 minutes, renewable within 14 days.
-    /// Note: Only works with Bearer access tokens, not QSDK session tokens.
-    /// If the access/refresh pair is outdated, the entire chain is invalidated.
     func renewAccessToken(accessToken: String, refreshToken: String) async throws -> TokenRenewResponse {
-        let url = Self.saasBaseURL + "/V4/AccessToken/Renew"
+        let url = Self.baseURL + "/V4/AccessToken/Renew"
         guard let requestURL = URL(string: url) else {
             throw CommvaultAPIError.invalidURL(url)
         }
@@ -237,8 +47,7 @@ actor CommvaultAPIService {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue("application/json", forHTTPHeaderField: "Accept")
-        // Renewal always uses Bearer format per Commvault docs
-        request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.addValue(accessToken, forHTTPHeaderField: "Authtoken")
 
         let body = TokenRenewRequest(accessToken: accessToken, refreshToken: refreshToken)
         request.httpBody = try JSONEncoder().encode(body)
@@ -249,22 +58,10 @@ actor CommvaultAPIService {
         return try JSONDecoder().decode(TokenRenewResponse.self, from: data)
     }
 
-    // MARK: - Reports
-
-    /// Get current capacity report
-    func getCurrentCapacity() async throws -> Data {
-        return try await getRaw(endpoint: "/DashboardTile/CurrentCapacity")
-    }
-
     // MARK: - Network Layer
 
     private func get<T: Decodable>(endpoint: String) async throws -> T {
-        let data = try await getRaw(endpoint: endpoint)
-        return try JSONDecoder().decode(T.self, from: data)
-    }
-
-    private func getRaw(endpoint: String) async throws -> Data {
-        let urlString = baseURL + endpoint
+        let urlString = Self.baseURL + endpoint
         guard let url = URL(string: urlString) else {
             throw CommvaultAPIError.invalidURL(urlString)
         }
@@ -272,45 +69,13 @@ actor CommvaultAPIService {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
-        request.addValue(authorizationHeaderValue, forHTTPHeaderField: "Authorization")
+        request.addValue(authToken, forHTTPHeaderField: "Authtoken")
         request.timeoutInterval = 30
 
         let (data, response) = try await URLSession.shared.data(for: request)
         try validateResponse(response)
-        return data
-    }
-
-    private func post<T: Decodable>(url: String, body: [String: Any], authenticated: Bool = true, extraHeaders: [String: String] = [:]) async throws -> T {
-        let data = try await postRawToURL(url: url, body: body, authenticated: authenticated, extraHeaders: extraHeaders)
+        lastCallTime = Date()
         return try JSONDecoder().decode(T.self, from: data)
-    }
-
-    private func postRaw(endpoint: String, body: [String: Any]) async throws -> Data {
-        let urlString = baseURL + endpoint
-        return try await postRawToURL(url: urlString, body: body, authenticated: true)
-    }
-
-    private func postRawToURL(url: String, body: [String: Any], authenticated: Bool, extraHeaders: [String: String] = [:]) async throws -> Data {
-        guard let url = URL(string: url) else {
-            throw CommvaultAPIError.invalidURL(url)
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("application/json", forHTTPHeaderField: "Accept")
-        if authenticated {
-            request.addValue(authorizationHeaderValue, forHTTPHeaderField: "Authorization")
-        }
-        for (key, value) in extraHeaders {
-            request.addValue(value, forHTTPHeaderField: key)
-        }
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        request.timeoutInterval = 30
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try validateResponse(response)
-        return data
     }
 
     private func validateResponse(_ response: URLResponse) throws {
@@ -336,18 +101,6 @@ actor CommvaultAPIService {
     }
 }
 
-// MARK: - Job Filter
-
-enum JobFilter: String {
-    case all = ""
-    case failed = "Failed"
-    case completed = "Completed"
-    case running = "Running"
-    case pending = "Pending"
-    case killed = "Killed"
-    case suspended = "Suspended"
-}
-
 // MARK: - API Errors
 
 enum CommvaultAPIError: LocalizedError {
@@ -368,7 +121,7 @@ enum CommvaultAPIError: LocalizedError {
         case .invalidResponse:
             return "Invalid response from server."
         case .unauthorized:
-            return "Authentication failed. Please check your API key."
+            return "Authentication failed. Token may have expired."
         case .forbidden:
             return "Access denied. Insufficient permissions."
         case .notFound:

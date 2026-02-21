@@ -2,16 +2,12 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthenticationManager
-    @State private var ring = ""
-    @State private var apiKey = ""
-    @State private var showAPIKeyInfo = false
-    @State private var useCredentials = false
-    @State private var username = ""
-    @State private var password = ""
+    @State private var accessToken = ""
+    @State private var refreshToken = ""
+    @State private var showTokenInfo = false
 
     var body: some View {
         ZStack {
-            // Background gradient
             CommvaultColors.heroGradient
                 .ignoresSafeArea()
 
@@ -30,112 +26,52 @@ struct LoginView: View {
                             .fontWeight(.bold)
                             .foregroundStyle(.white)
 
-                        Text("SaaS Dashboard")
+                        Text("User Dashboard")
                             .font(.title3)
                             .foregroundStyle(.white.opacity(0.8))
                     }
                     .padding(.bottom, 20)
 
-                    // Login Card
+                    // Token Setup Card
                     VStack(spacing: 20) {
-                        // Auth Method Toggle
-                        Picker("Auth Method", selection: $useCredentials) {
-                            Text("API Key").tag(false)
-                            Text("Credentials").tag(true)
+                        HStack {
+                            Text("Connect to your environment")
+                                .font(.headline)
+                            Spacer()
+                            Button {
+                                showTokenInfo = true
+                            } label: {
+                                Image(systemName: "info.circle")
+                                    .font(.body)
+                            }
                         }
-                        .pickerStyle(.segmented)
 
-                        if useCredentials {
-                            // Ring Input (needed for credential login to target the specific ring)
-                            VStack(alignment: .leading, spacing: 6) {
-                                Label("Ring Endpoint", systemImage: "globe")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        // Access Token
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Access Token", systemImage: "key")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
 
-                                HStack {
-                                    TextField("M88", text: $ring)
-                                        .textInputAutocapitalization(.characters)
-                                        .autocorrectionDisabled()
-                                        .font(.body.monospaced())
-
-                                    Text(".metallic.io")
-                                        .font(.body.monospaced())
-                                        .foregroundStyle(.secondary)
-                                }
+                            SecureField("Paste your access token", text: $accessToken)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
                                 .padding()
                                 .background(Color(.systemGray6))
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
 
-                                if !ring.isEmpty && !authManager.isValidRing(ring.uppercased()) {
-                                    Text("Format: M followed by 2-3 digits (e.g., M88, M123)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.red)
-                                }
-                            }
-                            // 2FA Warning
-                            HStack(spacing: 8) {
-                                Image(systemName: "exclamationmark.shield.fill")
-                                    .foregroundStyle(.orange)
-                                Text("Commvault Cloud requires 2FA. If enabled, password login will not work — use an API Key instead.")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(10)
-                            .background(Color.orange.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        // Refresh Token
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Refresh Token", systemImage: "arrow.clockwise")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
 
-                            // Username / Password
-                            VStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Label("Username", systemImage: "person")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    TextField("admin@company.com", text: $username)
-                                        .textInputAutocapitalization(.never)
-                                        .autocorrectionDisabled()
-                                        .keyboardType(.emailAddress)
-                                        .padding()
-                                        .background(Color(.systemGray6))
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                }
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Label("Password", systemImage: "lock")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    SecureField("Password", text: $password)
-                                        .padding()
-                                        .background(Color(.systemGray6))
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                }
-                            }
-                        } else {
-                            // API Key
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Label("API Key", systemImage: "key")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    Spacer()
-
-                                    Button {
-                                        showAPIKeyInfo = true
-                                    } label: {
-                                        Image(systemName: "info.circle")
-                                            .font(.caption)
-                                    }
-                                }
-
-                                SecureField("Paste your API key", text: $apiKey)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                    .padding()
-                                    .background(Color(.systemGray6))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
+                            SecureField("Paste your refresh token", text: $refreshToken)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
 
                         // Error Message
@@ -150,20 +86,13 @@ struct LoginView: View {
                             .padding(.horizontal)
                         }
 
-                        // Login Button
+                        // Connect Button
                         Button {
                             Task {
-                                if useCredentials {
-                                    await authManager.loginWithCredentials(
-                                        ring: ring,
-                                        username: username,
-                                        password: password
-                                    )
-                                } else {
-                                    await authManager.loginWithAPIKey(
-                                        apiKey: apiKey
-                                    )
-                                }
+                                await authManager.setupTokens(
+                                    accessToken: accessToken,
+                                    refreshToken: refreshToken
+                                )
                             }
                         } label: {
                             HStack {
@@ -192,7 +121,7 @@ struct LoginView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "lock.shield.fill")
                                 .font(.caption2)
-                            Text("API key stored securely in iOS Keychain")
+                            Text("Tokens stored securely in iOS Keychain")
                                 .font(.caption2)
                         }
                         .foregroundStyle(.secondary)
@@ -207,67 +136,50 @@ struct LoginView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAPIKeyInfo) {
-            APIKeyInfoSheet()
+        .sheet(isPresented: $showTokenInfo) {
+            TokenInfoSheet()
         }
     }
 
     private var isFormValid: Bool {
-        if useCredentials {
-            let ringValid = authManager.isValidRing(ring.uppercased())
-            return ringValid && !username.isEmpty && !password.isEmpty
-        } else {
-            return !apiKey.isEmpty
-        }
+        !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !refreshToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
-struct APIKeyInfoSheet: View {
+struct TokenInfoSheet: View {
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("How to get your API Key")
+                    Text("How to get your tokens")
                         .font(.title2)
                         .fontWeight(.bold)
 
                     VStack(alignment: .leading, spacing: 12) {
                         InfoStep(number: 1, text: "Log into your Commvault Command Center")
-                        InfoStep(number: 2, text: "Go to Manage > Security > Users")
-                        InfoStep(number: 3, text: "Select the Access Tokens tab")
-                        InfoStep(number: 4, text: "Click 'Add Token' to create a new access token")
-                        InfoStep(number: 5, text: "Set the scope to 'All' for full API access")
-                        InfoStep(number: 6, text: "Copy both the access token and the refresh token")
-                        InfoStep(number: 7, text: "Paste the access token here as your API key")
+                        InfoStep(number: 2, text: "Go to Manage > Security > Access Tokens")
+                        InfoStep(number: 3, text: "Click 'Add Token' to create a new access token")
+                        InfoStep(number: 4, text: "Set the scope to 'All' for full API access")
+                        InfoStep(number: 5, text: "Copy both the Access Token and Refresh Token")
+                        InfoStep(number: 6, text: "Paste them into this app")
                     }
 
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle.fill")
                             .foregroundStyle(.blue)
-                        Text("Access tokens expire after 30 minutes of inactivity but can be automatically renewed using the refresh token for up to 90 days.")
+                        Text("Access tokens expire after 2 hours. The app will automatically renew them using the refresh token.")
                             .font(.caption)
                     }
                     .padding(10)
                     .background(Color.blue.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                    Divider()
-
-                    Text("Security Notes")
-                        .font(.headline)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        BulletPoint(text: "Your API key is stored exclusively in the iOS Keychain with hardware-level encryption")
-                        BulletPoint(text: "The key is only accessible when the device is unlocked")
-                        BulletPoint(text: "The key never leaves your device - all API calls go through the secure Commvault Cloud gateway")
-                        BulletPoint(text: "You can revoke the token at any time from the Command Center")
-                    }
                 }
                 .padding()
             }
-            .navigationTitle("API Key Setup")
+            .navigationTitle("Token Setup")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -294,20 +206,6 @@ struct InfoStep: View {
 
             Text(text)
                 .font(.body)
-        }
-    }
-}
-
-struct BulletPoint: View {
-    let text: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "checkmark.shield.fill")
-                .foregroundStyle(CommvaultColors.success)
-                .font(.caption)
-            Text(text)
-                .font(.callout)
         }
     }
 }
