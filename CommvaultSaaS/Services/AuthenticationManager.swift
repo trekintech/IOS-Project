@@ -8,6 +8,7 @@ final class AuthenticationManager: ObservableObject {
     @Published var isAuthenticated = false
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var sessionWarning: String?
     @Published var commCellDetails: CommCellDetails?
     @Published var ringIdentifier: String = ""
 
@@ -51,10 +52,17 @@ final class AuthenticationManager: ObservableObject {
     }
 
     /// Attempt to renew the access token using the stored refresh token.
-    /// Returns true if renewal succeeded.
+    /// Only works with Bearer access tokens (not QSDK session tokens).
+    /// Per Commvault docs: tokens expire after 30 min, renewable within 14 days.
+    /// Using an outdated token pair invalidates the entire chain.
     func refreshTokenIfPossible() async -> Bool {
         guard let currentToken = keychain.retrieve(for: .apiToken),
               let refreshToken = keychain.retrieve(for: .refreshToken) else {
+            return false
+        }
+
+        // QSDK session tokens (from /Login) cannot be renewed via refresh tokens
+        if currentToken.hasPrefix("QSDK ") {
             return false
         }
 
@@ -101,7 +109,9 @@ final class AuthenticationManager: ObservableObject {
         isLoading = false
     }
 
-    /// Authenticate with username/password
+    /// Authenticate with username/password via POST /Login.
+    /// Returns a QSDK session token that expires in 30 minutes and cannot be refreshed.
+    /// For persistent access, users should create a service account access token instead.
     func loginWithCredentials(ring: String, username: String, password: String) async {
         isLoading = true
         errorMessage = nil
@@ -147,12 +157,15 @@ final class AuthenticationManager: ObservableObject {
                 return
             }
 
+            // QSDK tokens from /Login expire in 30 minutes and can't be refreshed.
+            // Store it but warn the user about the expiry.
             await api.configure(ring: normalizedRing, token: token)
             try keychain.save(token, for: .apiToken)
             try keychain.save(normalizedRing, for: .ringEndpoint)
             try keychain.save(username, for: .username)
             self.ringIdentifier = normalizedRing
             self.isAuthenticated = true
+            self.sessionWarning = "Session expires in 30 minutes. For persistent access, use a service account access token."
         } catch {
             errorMessage = "Login failed: \(error.localizedDescription)"
         }
@@ -166,6 +179,7 @@ final class AuthenticationManager: ObservableObject {
         commCellDetails = nil
         ringIdentifier = ""
         errorMessage = nil
+        sessionWarning = nil
     }
 
     /// Validate ring format: M followed by 2-3 digits

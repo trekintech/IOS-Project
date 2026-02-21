@@ -10,6 +10,20 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    // Session expiry warning for QSDK tokens (30-min login sessions)
+                    if let warning = authManager.sessionWarning {
+                        HStack {
+                            Image(systemName: "clock.badge.exclamationmark")
+                            Text(warning)
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.orange)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.orange.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
                     // Environment Header
                     EnvironmentHeaderCard(
                         commCellName: authManager.commCellDetails?.commcellName ?? "Commvault Cloud",

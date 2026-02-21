@@ -2,7 +2,14 @@ import Foundation
 
 /// Core service for all Commvault REST API interactions.
 /// SaaS API calls go through the unified gateway: https://api.metallic.io/...
-/// The access token carries tenant/ring routing information.
+///
+/// Two authentication modes:
+/// - **Access Token (Bearer)**: Created in Command Center under Manage > Security > Access Tokens.
+///   Use a service account for tokens that can be refreshed (30-min expiry, renewable within 14 days).
+///   Header: `Authorization: Bearer {token}`
+/// - **Session Login (QSDK)**: From POST /Login with username/password.
+///   Returns a QSDK session token (30-min expiry, not renewable via refresh tokens).
+///   Header: `Authorization: QSDK {token}` (token already includes prefix)
 actor CommvaultAPIService {
     static let shared = CommvaultAPIService()
 
@@ -11,35 +18,53 @@ actor CommvaultAPIService {
     private var baseURL: String = ""
     private var authToken: String = ""
 
+    /// Whether the current token is a QSDK session token (from /Login)
+    /// vs a Bearer access token (from Command Center).
+    private var isQSDKToken: Bool = false
+
     // MARK: - Configuration
 
     func configure(ring: String, token: String) {
         self.baseURL = Self.saasBaseURL
         self.authToken = token
+        self.isQSDKToken = token.hasPrefix("QSDK ")
     }
 
     func updateToken(_ token: String) {
         self.authToken = token
+        self.isQSDKToken = token.hasPrefix("QSDK ")
+    }
+
+    /// Build the correct Authorization header value based on token type.
+    /// - Bearer access tokens: `Authorization: Bearer {token}`
+    /// - QSDK session tokens: `Authorization: QSDK {token}` (prefix already in token)
+    private var authorizationHeaderValue: String {
+        if isQSDKToken {
+            return authToken  // Already contains "QSDK " prefix
+        } else {
+            return "Bearer \(authToken)"
+        }
     }
 
     // MARK: - Authentication Operations
 
-    /// Login and retrieve auth token via the ring-specific Command Center.
+    /// Login via POST https://api.metallic.io/Login
     /// Note: Commvault requires the password to be Base64 UTF-8 encoded.
-    /// This calls the ring-specific URL since the user doesn't have a token yet.
+    /// Returns a QSDK session token that expires in 30 minutes.
+    /// For longer-lived access, use a service account access token instead.
     func login(ring: String, username: String, password: String) async throws -> LoginResponse {
-        let url = "https://\(ring).metallic.io/commandcenter/api/Login"
+        let url = Self.saasBaseURL + "/Login"
         let base64Password = Data(password.utf8).base64EncodedString()
         let body: [String: Any] = [
             "username": username,
             "password": base64Password,
         ]
-        return try await post(url: url, body: body, authenticated: false)
+        return try await post(url: url, body: body, authenticated: false, extraHeaders: ["ring-id": ring])
     }
 
     /// Validate that an API token is working
     func validateToken() async throws -> CommCellDetails {
-        return try await get(endpoint: "/CommCell/CommCellDetails")
+        return try await get(endpoint: "/CommServ/CommCellInfo")
     }
 
     /// Create a new access token
@@ -71,7 +96,7 @@ actor CommvaultAPIService {
 
     /// Get CommCell details: name, version, release, ID
     func getCommCellDetails() async throws -> CommCellDetails {
-        return try await get(endpoint: "/CommCell/CommCellDetails")
+        return try await get(endpoint: "/CommServ/CommCellInfo")
     }
 
     /// Get health overview for the environment
@@ -198,10 +223,12 @@ actor CommvaultAPIService {
 
     // MARK: - Token Renewal
 
-    /// Renew an expired access token using a refresh token.
-    /// Returns a new access/refresh token pair.
+    /// Renew an expired Bearer access token using a refresh token.
+    /// Per Commvault docs: tokens expire after 30 minutes, renewable within 14 days.
+    /// Note: Only works with Bearer access tokens, not QSDK session tokens.
+    /// If the access/refresh pair is outdated, the entire chain is invalidated.
     func renewAccessToken(accessToken: String, refreshToken: String) async throws -> TokenRenewResponse {
-        let url = baseURL + "/V4/AccessToken/Renew"
+        let url = Self.saasBaseURL + "/V4/AccessToken/Renew"
         guard let requestURL = URL(string: url) else {
             throw CommvaultAPIError.invalidURL(url)
         }
@@ -210,6 +237,7 @@ actor CommvaultAPIService {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue("application/json", forHTTPHeaderField: "Accept")
+        // Renewal always uses Bearer format per Commvault docs
         request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 
         let body = TokenRenewRequest(accessToken: accessToken, refreshToken: refreshToken)
@@ -244,7 +272,7 @@ actor CommvaultAPIService {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
-        request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        request.addValue(authorizationHeaderValue, forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 30
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -252,8 +280,8 @@ actor CommvaultAPIService {
         return data
     }
 
-    private func post<T: Decodable>(url: String, body: [String: Any], authenticated: Bool = true) async throws -> T {
-        let data = try await postRawToURL(url: url, body: body, authenticated: authenticated)
+    private func post<T: Decodable>(url: String, body: [String: Any], authenticated: Bool = true, extraHeaders: [String: String] = [:]) async throws -> T {
+        let data = try await postRawToURL(url: url, body: body, authenticated: authenticated, extraHeaders: extraHeaders)
         return try JSONDecoder().decode(T.self, from: data)
     }
 
@@ -262,7 +290,7 @@ actor CommvaultAPIService {
         return try await postRawToURL(url: urlString, body: body, authenticated: true)
     }
 
-    private func postRawToURL(url: String, body: [String: Any], authenticated: Bool) async throws -> Data {
+    private func postRawToURL(url: String, body: [String: Any], authenticated: Bool, extraHeaders: [String: String] = [:]) async throws -> Data {
         guard let url = URL(string: url) else {
             throw CommvaultAPIError.invalidURL(url)
         }
@@ -272,7 +300,10 @@ actor CommvaultAPIService {
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         if authenticated {
-            request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+            request.addValue(authorizationHeaderValue, forHTTPHeaderField: "Authorization")
+        }
+        for (key, value) in extraHeaders {
+            request.addValue(value, forHTTPHeaderField: key)
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.timeoutInterval = 30
