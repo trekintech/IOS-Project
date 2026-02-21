@@ -40,7 +40,7 @@ final class AuthenticationManager: ObservableObject {
         await api.configure(token: trimmedAccess)
 
         do {
-            let _ = try await api.getUsers(limit: 1)
+            let _ = try await api.getUsers()
             try keychain.save(trimmedAccess, for: .apiToken)
             try keychain.save(trimmedRefresh, for: .refreshToken)
             self.isAuthenticated = true

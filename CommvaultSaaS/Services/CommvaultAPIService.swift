@@ -31,8 +31,8 @@ actor CommvaultAPIService {
 
     // MARK: - Users
 
-    func getUsers(limit: Int = 1000) async throws -> UsersResponse {
-        return try await get(endpoint: "/v4/user?limit=\(limit)")
+    func getUsers() async throws -> UsersResponse {
+        return try await get(endpoint: "/v4/user")
     }
 
     // MARK: - Token Renewal
@@ -75,12 +75,6 @@ actor CommvaultAPIService {
         let (data, response) = try await URLSession.shared.data(for: request)
         try validateResponse(response)
         lastCallTime = Date()
-
-        // Debug: dump raw JSON so we can verify field names
-        if let raw = String(data: data, encoding: .utf8) {
-            print("[API DEBUG] Raw response for \(endpoint):\n\(raw)")
-        }
-
         return try JSONDecoder().decode(T.self, from: data)
     }
 
