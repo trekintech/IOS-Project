@@ -39,7 +39,7 @@ actor CommvaultAPIService {
 
     /// Validate that an API token is working
     func validateToken() async throws -> CommCellDetails {
-        return try await get(endpoint: "/CommServ/CommCellInfo")
+        return try await get(endpoint: "/CommCell/CommCellDetails")
     }
 
     /// Create a new access token
@@ -71,7 +71,7 @@ actor CommvaultAPIService {
 
     /// Get CommCell details: name, version, release, ID
     func getCommCellDetails() async throws -> CommCellDetails {
-        return try await get(endpoint: "/CommServ/CommCellInfo")
+        return try await get(endpoint: "/CommCell/CommCellDetails")
     }
 
     /// Get health overview for the environment
