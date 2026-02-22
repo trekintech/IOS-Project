@@ -51,7 +51,52 @@ actor CommvaultAPIService {
 
     func getServers() async throws -> ServersResponse {
         let endpoint = "/V4/Servers?fq=clientProperties.isServerClient%3Aeq%3Atrue&showOnlyInfrastructureMachines=0&additionalProperties=true&fl=clientProperties.client%2CclientProperties.clientProps%2CclientProperties.installDate%2Coverview"
-        return try await get(endpoint: endpoint)
+        return try await getDebug(endpoint: endpoint)
+    }
+
+    /// Debug version of GET that prints raw JSON before decoding — temporary for response mapping.
+    private func getDebug<T: Decodable>(endpoint: String) async throws -> T {
+        let urlString = baseURL + endpoint
+        guard let url = URL(string: urlString) else {
+            throw CommvaultAPIError.invalidURL(urlString)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.addValue(authToken, forHTTPHeaderField: "Authtoken")
+        request.timeoutInterval = 30
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+        lastCallTime = Date()
+
+        // Debug: print raw JSON
+        if let json = try? JSONSerialization.jsonObject(with: data),
+           let pretty = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
+           let str = String(data: pretty, encoding: .utf8) {
+            print("=== RAW /V4/Servers RESPONSE (first 3000 chars) ===")
+            print(String(str.prefix(3000)))
+            print("=== END RAW RESPONSE ===")
+        }
+
+        // Debug: print top-level keys
+        if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            print("=== TOP-LEVEL KEYS: \(dict.keys.sorted()) ===")
+            if let servers = dict["serversList"] as? [[String: Any]], let first = servers.first {
+                print("=== FIRST SERVER (serversList) KEYS: \(first.keys.sorted()) ===")
+            }
+            if let servers = dict["servers"] as? [[String: Any]], let first = servers.first {
+                print("=== FIRST SERVER (servers) KEYS: \(first.keys.sorted()) ===")
+            }
+        }
+
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            print("=== DECODING ERROR: \(error) ===")
+            throw error
+        }
     }
 
     // MARK: - Token Renewal
