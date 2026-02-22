@@ -70,13 +70,25 @@ struct ServerRow: View {
                     )
                 }
 
-                DetailRow(
-                    icon: "person.badge.key",
-                    label: "Roles",
-                    value: server.rolesDisplay
-                )
+                let roles = server.clientRolesDisplay
+                if !roles.isEmpty {
+                    DetailRow(
+                        icon: "person.badge.key",
+                        label: "Roles",
+                        value: roles
+                    )
+                }
 
-                if let os = server.additionalProperties?.osInfo, !os.isEmpty {
+                let agentNames = server.agentNamesDisplay
+                if !agentNames.isEmpty {
+                    DetailRow(
+                        icon: "square.stack.3d.up",
+                        label: "Agents",
+                        value: agentNames
+                    )
+                }
+
+                if let os = server.OS, !os.isEmpty {
                     DetailRow(
                         icon: "desktopcomputer",
                         label: "OS",
@@ -84,21 +96,27 @@ struct ServerRow: View {
                     )
                 }
 
-                // Show lastOnlineTime for offline servers
-                if healthStatus == .offline, let lastOnline = server.lastOnlineDate {
+                if let vendor = server.cloudVendor, !vendor.isEmpty {
                     DetailRow(
-                        icon: "clock.badge.exclamationmark",
-                        label: "Last Online",
-                        value: lastOnline.formatted(.dateTime.month().day().year().hour().minute())
+                        icon: "cloud",
+                        label: "Cloud",
+                        value: vendor
                     )
                 }
 
-                // Show lastOfflineTime for offline servers
-                if healthStatus == .offline, let lastOffline = server.lastOfflineDate {
+                if let region = server.region?.displayName ?? server.region?.name, !region.isEmpty {
                     DetailRow(
-                        icon: "wifi.slash",
-                        label: "Went Offline",
-                        value: lastOffline.formatted(.dateTime.month().day().year().hour().minute())
+                        icon: "location",
+                        label: "Region",
+                        value: region
+                    )
+                }
+
+                if let lastBackupDate = server.lastBackupDate {
+                    DetailRow(
+                        icon: "clock",
+                        label: "Last Backup",
+                        value: lastBackupDate.formatted(.dateTime.month().day().year())
                     )
                 }
 

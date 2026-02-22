@@ -112,30 +112,43 @@ struct ServersResponse: Codable {
 }
 
 struct CommvaultServer: Codable, Identifiable {
+    // Core identity
     let id: Int
     let name: String?
     let displayName: String?
     let hostName: String?
-    let installTime: TimeInterval?
+
+    // Software
     let version: String?
+    let OS: String?
+
+    // Status — NOTE: API field is "updateState", not "updateStatus"
     let configured: Bool?
-    let updateStatus: String?
+    let updateState: String?
     let networkReadiness: String?
     let isInfrastructure: Bool?
     let isMARoleSet: Bool?
+    let isMAPackageInstalled: Bool?
+
+    // Timestamps (Unix seconds, may be Int or Double)
+    let installTime: TimeInterval?
+
+    // Relations
     let agents: [ServerAgent]?
     let serverGroups: [ServerGroup]?
+    let clientRoles: [ServerClientRole]?     // array of {id, name} objects per schema
     let company: CompanyInfo?
     let region: ServerRegion?
     let additionalProperties: ServerAdditionalProperties?
-    let clientRoles: [String]?
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, displayName, hostName, installTime, version
-        case configured, updateStatus, networkReadiness
-        case isInfrastructure, isMARoleSet
-        case agents, serverGroups, company, region
-        case additionalProperties, clientRoles
+        case id, name, displayName, hostName
+        case version, OS
+        case configured, updateState, networkReadiness
+        case isInfrastructure, isMARoleSet, isMAPackageInstalled
+        case installTime
+        case agents, serverGroups, clientRoles, company, region
+        case additionalProperties
     }
 
     init(from decoder: Decoder) throws {
@@ -145,17 +158,19 @@ struct CommvaultServer: Codable, Identifiable {
         displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
         hostName = try container.decodeIfPresent(String.self, forKey: .hostName)
         version = try container.decodeIfPresent(String.self, forKey: .version)
+        OS = try container.decodeIfPresent(String.self, forKey: .OS)
         configured = try container.decodeIfPresent(Bool.self, forKey: .configured)
-        updateStatus = try container.decodeIfPresent(String.self, forKey: .updateStatus)
+        updateState = try container.decodeIfPresent(String.self, forKey: .updateState)
         networkReadiness = try container.decodeIfPresent(String.self, forKey: .networkReadiness)
         isInfrastructure = try container.decodeIfPresent(Bool.self, forKey: .isInfrastructure)
         isMARoleSet = try container.decodeIfPresent(Bool.self, forKey: .isMARoleSet)
-        agents = try container.decodeIfPresent([ServerAgent].self, forKey: .agents)
-        serverGroups = try container.decodeIfPresent([ServerGroup].self, forKey: .serverGroups)
+        isMAPackageInstalled = try container.decodeIfPresent(Bool.self, forKey: .isMAPackageInstalled)
+        agents = try? container.decodeIfPresent([ServerAgent].self, forKey: .agents)
+        serverGroups = try? container.decodeIfPresent([ServerGroup].self, forKey: .serverGroups)
+        clientRoles = try? container.decodeIfPresent([ServerClientRole].self, forKey: .clientRoles)
         company = try container.decodeIfPresent(CompanyInfo.self, forKey: .company)
         region = try container.decodeIfPresent(ServerRegion.self, forKey: .region)
-        additionalProperties = try container.decodeIfPresent(ServerAdditionalProperties.self, forKey: .additionalProperties)
-        clientRoles = try container.decodeIfPresent([String].self, forKey: .clientRoles)
+        additionalProperties = try? container.decodeIfPresent(ServerAdditionalProperties.self, forKey: .additionalProperties)
 
         if let intVal = try? container.decodeIfPresent(Int.self, forKey: .installTime) {
             installTime = TimeInterval(intVal)
@@ -179,16 +194,6 @@ struct CommvaultServer: Codable, Identifiable {
         return Date(timeIntervalSince1970: ts)
     }
 
-    var lastOnlineDate: Date? {
-        guard let ts = additionalProperties?.lastOnlineTime, ts > 0 else { return nil }
-        return Date(timeIntervalSince1970: ts)
-    }
-
-    var lastOfflineDate: Date? {
-        guard let ts = additionalProperties?.lastOfflineTime, ts > 0 else { return nil }
-        return Date(timeIntervalSince1970: ts)
-    }
-
     var isOffline: Bool {
         networkReadiness?.uppercased() == "OFFLINE"
     }
@@ -198,17 +203,17 @@ struct CommvaultServer: Codable, Identifiable {
     }
 
     var needsUpdate: Bool {
-        updateStatus?.uppercased() == "NEEDS_UPDATE"
+        updateState?.uppercased() == "NEEDS_UPDATE"
     }
 
     var isUpToDate: Bool {
-        updateStatus?.uppercased() == "UP_TO_DATE"
+        updateState?.uppercased() == "UP_TO_DATE"
     }
 
     var isApplicable: Bool {
-        let status = updateStatus?.uppercased() ?? ""
+        let state = updateState?.uppercased() ?? ""
         let readiness = networkReadiness?.uppercased() ?? ""
-        return status != "NOT_APPLICABLE" && readiness != "NOT_APPLICABLE"
+        return state != "NOT_APPLICABLE" && readiness != "NOT_APPLICABLE"
     }
 
     var healthStatus: ServerHealthStatus {
@@ -218,9 +223,16 @@ struct CommvaultServer: Codable, Identifiable {
         return .unknown
     }
 
-    var rolesDisplay: String {
-        guard let roles = clientRoles, !roles.isEmpty else { return "No roles" }
-        return roles.joined(separator: ", ")
+    /// Client role names joined for display
+    var clientRolesDisplay: String {
+        guard let roles = clientRoles, !roles.isEmpty else { return "" }
+        return roles.compactMap { $0.name }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    /// Agent names joined for display
+    var agentNamesDisplay: String {
+        guard let agentList = agents, !agentList.isEmpty else { return "" }
+        return agentList.compactMap { $0.name }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
@@ -261,6 +273,43 @@ enum ServerHealthStatus: String, CaseIterable {
 struct ServerAgent: Codable {
     let id: Int?
     let name: String?
+    let applicationSize: Int?
+    // Timestamps stored as Int64 in API — decode flexibly
+    let lastSuccessfulBackup: TimeInterval?
+    let lastSuccessfulAGPBackup: TimeInterval?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, applicationSize, lastSuccessfulBackup, lastSuccessfulAGPBackup
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(Int.self, forKey: .id)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        applicationSize = try? container.decodeIfPresent(Int.self, forKey: .applicationSize)
+
+        if let intVal = try? container.decodeIfPresent(Int.self, forKey: .lastSuccessfulBackup) {
+            lastSuccessfulBackup = TimeInterval(intVal)
+        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .lastSuccessfulBackup) {
+            lastSuccessfulBackup = doubleVal
+        } else {
+            lastSuccessfulBackup = nil
+        }
+
+        if let intVal = try? container.decodeIfPresent(Int.self, forKey: .lastSuccessfulAGPBackup) {
+            lastSuccessfulAGPBackup = TimeInterval(intVal)
+        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .lastSuccessfulAGPBackup) {
+            lastSuccessfulAGPBackup = doubleVal
+        } else {
+            lastSuccessfulAGPBackup = nil
+        }
+    }
+}
+
+/// clientRoles is an array of {id, name} objects per the V4/Servers schema
+struct ServerClientRole: Codable {
+    let id: Int?
+    let name: String?
 }
 
 struct ServerGroup: Codable {
@@ -274,44 +323,7 @@ struct ServerRegion: Codable {
     let displayName: String?
 }
 
+/// additionalProperties per V4/Servers schema — only contains vendorType
 struct ServerAdditionalProperties: Codable {
-    let isClientDeleted: Bool?
-    let isInfrastructure: Bool?
-    let clientStatus: String?
-    let lastOnlineTime: TimeInterval?
-    let lastOfflineTime: TimeInterval?
-    let osInfo: String?
-    let VMGUID: String?
     let vendorType: String?
-
-    private enum CodingKeys: String, CodingKey {
-        case isClientDeleted, isInfrastructure, clientStatus
-        case lastOnlineTime, lastOfflineTime, osInfo, VMGUID, vendorType
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        isClientDeleted = try container.decodeIfPresent(Bool.self, forKey: .isClientDeleted)
-        isInfrastructure = try container.decodeIfPresent(Bool.self, forKey: .isInfrastructure)
-        clientStatus = try container.decodeIfPresent(String.self, forKey: .clientStatus)
-        osInfo = try container.decodeIfPresent(String.self, forKey: .osInfo)
-        VMGUID = try container.decodeIfPresent(String.self, forKey: .VMGUID)
-        vendorType = try container.decodeIfPresent(String.self, forKey: .vendorType)
-
-        if let intVal = try? container.decodeIfPresent(Int.self, forKey: .lastOnlineTime) {
-            lastOnlineTime = TimeInterval(intVal)
-        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .lastOnlineTime) {
-            lastOnlineTime = doubleVal
-        } else {
-            lastOnlineTime = nil
-        }
-
-        if let intVal = try? container.decodeIfPresent(Int.self, forKey: .lastOfflineTime) {
-            lastOfflineTime = TimeInterval(intVal)
-        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .lastOfflineTime) {
-            lastOfflineTime = doubleVal
-        } else {
-            lastOfflineTime = nil
-        }
-    }
 }
