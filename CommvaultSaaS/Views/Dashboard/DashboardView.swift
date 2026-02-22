@@ -6,160 +6,151 @@ struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Header
-                    VStack(spacing: 4) {
-                        Text(authManager.ringHost)
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                            .monospaced()
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(viewModel.isLoading ? .orange : .green)
-                                .frame(width: 8, height: 8)
-                            Text(viewModel.isLoading ? "Loading..." : "Connected")
-                                .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(CommvaultColors.cardGradient)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-
-                    if let error = viewModel.errorMessage {
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.red)
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.red.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    if !viewModel.isLoading {
-                        // Total Users
-                        NavigationLink {
-                            UserListView(
-                                title: "All Users",
-                                users: viewModel.allUsers
-                            )
-                        } label: {
-                            StatCard(
-                                icon: "person.3.fill",
-                                title: "Total Users",
-                                count: viewModel.totalUsers,
-                                color: CommvaultColors.mediumPurple,
-                                gradient: LinearGradient(
-                                    colors: [CommvaultColors.deepPurple, CommvaultColors.navyBlue],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        }
-
-                        // Inactive 6+ Months
-                        NavigationLink {
-                            UserListView(
-                                title: "Inactive 6+ Months",
-                                users: viewModel.inactiveSixMonthUsers
-                            )
-                        } label: {
-                            StatCard(
-                                icon: "clock.badge.questionmark",
-                                title: "Inactive 6+ Months",
-                                count: viewModel.inactiveSixMonthCount,
-                                subtitle: "Last login over 6 months ago",
-                                color: .orange,
-                                gradient: LinearGradient(
-                                    colors: [Color(hex: "5C4B1E"), Color(hex: "B8860B")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        }
-
-                        // Inactive 1+ Year
-                        NavigationLink {
-                            UserListView(
-                                title: "Inactive 1+ Year",
-                                users: viewModel.inactiveOneYearUsers
-                            )
-                        } label: {
-                            StatCard(
-                                icon: "clock.badge.exclamationmark",
-                                title: "Inactive 1+ Year",
-                                count: viewModel.inactiveOneYearCount,
-                                subtitle: "Last login over 12 months ago",
-                                color: CommvaultColors.warning,
-                                gradient: LinearGradient(
-                                    colors: [Color(hex: "7B4B1E"), Color(hex: "C97A1E")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        }
-
-                        // Never Logged In
-                        NavigationLink {
-                            UserListView(
-                                title: "Never Logged In",
-                                users: viewModel.neverLoggedInUsers
-                            )
-                        } label: {
-                            StatCard(
-                                icon: "person.fill.xmark",
-                                title: "Never Logged In",
-                                count: viewModel.neverLoggedInCount,
-                                subtitle: "No login activity recorded",
-                                color: CommvaultColors.critical,
-                                gradient: LinearGradient(
-                                    colors: [Color(hex: "7B1E1E"), Color(hex: "C93030")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        }
+        ScrollView {
+            VStack(spacing: 20) {
+                // Header
+                VStack(spacing: 4) {
+                    Text(authManager.ringHost)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .monospaced()
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(viewModel.isLoading ? .orange : .green)
+                            .frame(width: 8, height: 8)
+                        Text(viewModel.isLoading ? "Loading..." : "Connected")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.8))
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding()
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("User Dashboard")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        Task {
-                            await authManager.renewIfNeeded()
-                            await viewModel.loadUsers(authManager: authManager)
-                        }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
+                .background(CommvaultColors.cardGradient)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                if let error = viewModel.errorMessage {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
                     }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.red.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+
+                if !viewModel.isLoading {
+                    // Total Users
                     NavigationLink {
-                        SettingsView()
-                            .environmentObject(authManager)
+                        UserListView(
+                            title: "All Users",
+                            users: viewModel.allUsers
+                        )
                     } label: {
-                        Image(systemName: "gearshape")
+                        StatCard(
+                            icon: "person.3.fill",
+                            title: "Total Users",
+                            count: viewModel.totalUsers,
+                            color: CommvaultColors.mediumPurple,
+                            gradient: LinearGradient(
+                                colors: [CommvaultColors.deepPurple, CommvaultColors.navyBlue],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    }
+
+                    // Inactive 6+ Months
+                    NavigationLink {
+                        UserListView(
+                            title: "Inactive 6+ Months",
+                            users: viewModel.inactiveSixMonthUsers
+                        )
+                    } label: {
+                        StatCard(
+                            icon: "clock.badge.questionmark",
+                            title: "Inactive 6+ Months",
+                            count: viewModel.inactiveSixMonthCount,
+                            subtitle: "Last login over 6 months ago",
+                            color: .orange,
+                            gradient: LinearGradient(
+                                colors: [Color(hex: "5C4B1E"), Color(hex: "B8860B")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    }
+
+                    // Inactive 1+ Year
+                    NavigationLink {
+                        UserListView(
+                            title: "Inactive 1+ Year",
+                            users: viewModel.inactiveOneYearUsers
+                        )
+                    } label: {
+                        StatCard(
+                            icon: "clock.badge.exclamationmark",
+                            title: "Inactive 1+ Year",
+                            count: viewModel.inactiveOneYearCount,
+                            subtitle: "Last login over 12 months ago",
+                            color: CommvaultColors.warning,
+                            gradient: LinearGradient(
+                                colors: [Color(hex: "7B4B1E"), Color(hex: "C97A1E")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    }
+
+                    // Never Logged In
+                    NavigationLink {
+                        UserListView(
+                            title: "Never Logged In",
+                            users: viewModel.neverLoggedInUsers
+                        )
+                    } label: {
+                        StatCard(
+                            icon: "person.fill.xmark",
+                            title: "Never Logged In",
+                            count: viewModel.neverLoggedInCount,
+                            subtitle: "No login activity recorded",
+                            color: CommvaultColors.critical,
+                            gradient: LinearGradient(
+                                colors: [Color(hex: "7B1E1E"), Color(hex: "C93030")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                     }
                 }
             }
-            .refreshable {
-                await authManager.renewIfNeeded()
-                await viewModel.loadUsers(authManager: authManager)
+            .padding()
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("User Dashboard")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task {
+                        await authManager.renewIfNeeded()
+                        await viewModel.loadUsers(authManager: authManager)
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
             }
-            .task {
-                await authManager.renewIfNeeded()
-                await viewModel.loadUsers(authManager: authManager)
-            }
+        }
+        .refreshable {
+            await authManager.renewIfNeeded()
+            await viewModel.loadUsers(authManager: authManager)
+        }
+        .task {
+            await authManager.renewIfNeeded()
+            await viewModel.loadUsers(authManager: authManager)
         }
     }
 }

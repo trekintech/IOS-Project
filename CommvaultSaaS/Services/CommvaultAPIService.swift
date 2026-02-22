@@ -47,6 +47,13 @@ actor CommvaultAPIService {
         return try await get(endpoint: "/v4/user")
     }
 
+    // MARK: - Servers
+
+    func getServers() async throws -> ServersResponse {
+        let endpoint = "/V4/Servers?fq=clientProperties.isServerClient%3Aeq%3Atrue&showOnlyInfrastructureMachines=0&additionalProperties=true&fl=clientProperties.client%2CclientProperties.clientProps%2CclientProperties.installDate%2Coverview"
+        return try await get(endpoint: endpoint)
+    }
+
     // MARK: - Token Renewal
 
     func renewAccessToken(accessToken: String, refreshToken: String) async throws -> TokenRenewResponse {
