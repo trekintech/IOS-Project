@@ -47,6 +47,12 @@ actor CommvaultAPIService {
         return try await get(endpoint: "/v4/user")
     }
 
+    // MARK: - Credentials
+
+    func getCredentials() async throws -> CredentialResponse {
+        return try await get(endpoint: "/v4/credential?AllProperties=true")
+    }
+
     // MARK: - Servers
 
     func getServers() async throws -> ServersResponse {

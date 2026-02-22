@@ -59,6 +59,22 @@ struct HomeView: View {
                             )
                         )
                     }
+
+                    NavigationLink {
+                        CredentialSecurityView()
+                            .environmentObject(authManager)
+                    } label: {
+                        HomeMenuCard(
+                            icon: "key.shield",
+                            title: "Credential Security",
+                            subtitle: "Credential rotation aging & compliance",
+                            gradient: LinearGradient(
+                                colors: [CommvaultColors.darkPlum, CommvaultColors.rosePink],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    }
                 }
                 .padding()
             }

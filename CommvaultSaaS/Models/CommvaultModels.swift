@@ -329,3 +329,149 @@ struct ServerRegion: Codable {
 struct ServerAdditionalProperties: Codable {
     let vendorType: String?
 }
+
+// MARK: - Credentials
+
+struct CredentialResponse: Codable {
+    let credentialManager: [CommvaultCredential]?
+}
+
+struct CommvaultCredential: Codable, Identifiable {
+    let id: Int
+    let name: String?
+    let accountType: String?
+    let vendorType: String?
+    let authType: String?
+    let lastModifiedTime: TimeInterval?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, accountType, vendorType, authType, lastModifiedTime
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        accountType = try container.decodeIfPresent(String.self, forKey: .accountType)
+        vendorType = try container.decodeIfPresent(String.self, forKey: .vendorType)
+        authType = try container.decodeIfPresent(String.self, forKey: .authType)
+
+        if let intVal = try? container.decodeIfPresent(Int.self, forKey: .lastModifiedTime) {
+            lastModifiedTime = TimeInterval(intVal)
+        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .lastModifiedTime) {
+            lastModifiedTime = doubleVal
+        } else {
+            lastModifiedTime = nil
+        }
+    }
+
+    // MARK: - Computed
+
+    var displayName: String {
+        if let n = name, !n.isEmpty { return n }
+        return "Unknown Credential"
+    }
+
+    var lastModifiedDate: Date? {
+        guard let ts = lastModifiedTime, ts > 0 else { return nil }
+        return Date(timeIntervalSince1970: ts)
+    }
+
+    var daysSinceRotation: Int? {
+        guard let date = lastModifiedDate else { return nil }
+        return Calendar.current.dateComponents([.day], from: date, to: Date()).day
+    }
+
+    var ageBucket: CredentialAgeBucket? {
+        guard let days = daysSinceRotation else { return nil }
+        if days > 365 { return .overOneYear }
+        if days > 180 { return .overSixMonths }
+        if days > 90  { return .overNinetyDays }
+        return nil
+    }
+
+    /// The type string used for filtering — prefers accountType, falls back to vendorType
+    var effectiveType: String {
+        (accountType ?? vendorType ?? "").uppercased()
+    }
+
+    /// Whether this credential matches the allow-list of tracked types
+    var isTrackedType: Bool {
+        CommvaultCredential.trackedTypes.contains(effectiveType)
+    }
+
+    // MARK: - Allow-list
+
+    static let trackedTypes: Set<String> = [
+        "WINDOWSACCOUNT", "LINUXACCOUNT", "SSHACCOUNT", "NDMPACCOUNT",
+        "VMWAREACCOUNT", "HYPERVACCOUNT", "DATABASE_ACCOUNT",
+        "SQL_SERVER_ACCOUNT", "ORACLE", "SAP_ORACLE", "SAP_HANA",
+        "POSTGRESQL", "MYSQL", "DB2", "INFORMIX", "SYBASE", "SAP_MAXDB",
+        "GOOGLE_SERVICE_ACCOUNT", "KUBERNETES_SERVICE_ACCOUNT",
+        "AZURE_CREDENTIAL", "EXTERNAL_CREDENTIAL", "AZURE_STORAGE_ACCOUNT",
+        "STORAGE_ARRAY_ACCOUNT", "AMAZON_S3", "MICROSOFT_AZURE",
+        "RACKSPACE_CLOUD_FILES", "EMC_ATMOS", "ATT_SYNAPTIC", "HDS_HCP",
+        "OPENSTACK", "AMPLIDATA", "CMCC_ONEST", "VERIZON_CLOUD",
+        "GOOGLE_CLOUD", "ALICLOUD_OSS", "HUAWEI_OSS",
+        "TELEFONICA_OPEN_CLOUD_OBJECT_STORAGE",
+        "ORACLE_CLOUD_INFRASTRUCTURE", "INSPUR_CLOUD", "IBM_CLOUD",
+        "KINGSOFT_KS3", "IRON_MOUNTAIN_CLOUD", "S3_COMPATIBLE",
+        "AMAZON_GLACIER", "HPE_CATALYST", "CEPH_OBJECT_GATEWAY_S3",
+        "CLOUDIAN_HYPERSTORE", "DELL_EMC_ECS_S3",
+        "FUJITSU_STORAGE_ETERNUS", "HITACHI_VANTARA_HCP_S3",
+        "IBM_CLOUD_S3", "NETAPP_STORAGEGRID", "REVERA_VAULT",
+        "SCALITY_RING", "WASABI_HOT_CLOUD_STORAGE", "NUTANIX_BUCKETS",
+        "HITACHI_VANTARA_HCP_CLOUD_SCALE_S3", "PURE_STORAGE_FLASHBLADE",
+        "VAST_DATA", "SALESFORCE_CONNECTED_APP",
+        "SERVICENOW_USER_ACCOUNT", "SERVICENOW_REST_API_KEY",
+        "MONGODB_ATLAS_ACCESS_KEY", "DATADOG", "CONNECTWISE_ACCOUNT",
+        "AUTOTASK_ACCOUNT", "HALO_ACCOUNT", "WIZ",
+    ]
+}
+
+enum CredentialAgeBucket: String, CaseIterable {
+    case overOneYear = "Over 1 Year"
+    case overSixMonths = "Over 6 Months"
+    case overNinetyDays = "Over 90 Days"
+
+    var color: Color {
+        switch self {
+        case .overOneYear:     return Color(hex: "FF3B30")
+        case .overSixMonths:   return Color(hex: "FF9500")
+        case .overNinetyDays:  return Color(hex: "FFCC00")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .overOneYear:     return "exclamationmark.shield.fill"
+        case .overSixMonths:   return "exclamationmark.triangle.fill"
+        case .overNinetyDays:  return "clock.badge.exclamationmark"
+        }
+    }
+
+    var sortOrder: Int {
+        switch self {
+        case .overOneYear:     return 0
+        case .overSixMonths:   return 1
+        case .overNinetyDays:  return 2
+        }
+    }
+
+    var gradient: LinearGradient {
+        switch self {
+        case .overOneYear:
+            return LinearGradient(
+                colors: [Color(hex: "7B1E1E"), Color(hex: "C93030")],
+                startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .overSixMonths:
+            return LinearGradient(
+                colors: [Color(hex: "5C4B1E"), Color(hex: "B8860B")],
+                startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .overNinetyDays:
+            return LinearGradient(
+                colors: [Color(hex: "5C5000"), Color(hex: "B89F0B")],
+                startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+}
