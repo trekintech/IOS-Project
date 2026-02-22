@@ -11,7 +11,7 @@ struct DashboardView: View {
                 VStack(spacing: 20) {
                     // Header
                     VStack(spacing: 4) {
-                        Text("m036.metallic.io")
+                        Text(authManager.ringHost)
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.7))
                             .monospaced()

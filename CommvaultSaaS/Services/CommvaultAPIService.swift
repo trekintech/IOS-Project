@@ -1,26 +1,38 @@
 import Foundation
 
 /// Stripped-back API service for Commvault Cloud user management.
-/// All calls go directly to the ring: https://m036.metallic.io/commandcenter/api
+/// Ring-based URL: https://m{NNN}.metallic.io/commandcenter/api
 /// Auth: `Authtoken: {accessToken}`
 actor CommvaultAPIService {
     static let shared = CommvaultAPIService()
 
-    private static let baseURL = "https://m036.metallic.io/commandcenter/api"
-
+    private var ringNumber: String = "036"
     private var authToken: String = ""
     private var lastCallTime: Date?
 
+    private var baseURL: String {
+        "https://m\(ringNumber).metallic.io/commandcenter/api"
+    }
+
+    var currentRingHost: String {
+        "m\(ringNumber).metallic.io"
+    }
+
     // MARK: - Configuration
 
-    func configure(token: String) {
+    func configure(token: String, ring: String) {
         self.authToken = token
+        self.ringNumber = ring
         self.lastCallTime = Date()
     }
 
     func updateToken(_ token: String) {
         self.authToken = token
         self.lastCallTime = Date()
+    }
+
+    func updateRing(_ ring: String) {
+        self.ringNumber = ring
     }
 
     /// Whether the token likely needs renewal (> 2 hours since last call).
@@ -38,7 +50,7 @@ actor CommvaultAPIService {
     // MARK: - Token Renewal
 
     func renewAccessToken(accessToken: String, refreshToken: String) async throws -> TokenRenewResponse {
-        let url = Self.baseURL + "/V4/AccessToken/Renew"
+        let url = baseURL + "/V4/AccessToken/Renew"
         guard let requestURL = URL(string: url) else {
             throw CommvaultAPIError.invalidURL(url)
         }
@@ -61,7 +73,7 @@ actor CommvaultAPIService {
     // MARK: - Network Layer
 
     private func get<T: Decodable>(endpoint: String) async throws -> T {
-        let urlString = Self.baseURL + endpoint
+        let urlString = baseURL + endpoint
         guard let url = URL(string: urlString) else {
             throw CommvaultAPIError.invalidURL(urlString)
         }

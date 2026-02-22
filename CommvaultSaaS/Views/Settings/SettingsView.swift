@@ -3,6 +3,8 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var isRenewing = false
+    @State private var showUpdateTokens = false
+    @State private var showResetConfirm = false
 
     var body: some View {
         List {
@@ -11,7 +13,7 @@ struct SettingsView: View {
                 HStack {
                     Label("Ring", systemImage: "server.rack")
                     Spacer()
-                    Text("m036.metallic.io")
+                    Text(authManager.ringHost)
                         .foregroundStyle(.secondary)
                         .monospaced()
                 }
@@ -51,8 +53,9 @@ struct SettingsView: View {
                 HStack {
                     Label("Auto-Renewal", systemImage: "arrow.triangle.2.circlepath")
                     Spacer()
-                    Text("Every 2 hours")
+                    Text("On launch & every 2 hrs")
                         .foregroundStyle(.secondary)
+                        .font(.caption)
                 }
 
                 Button {
@@ -71,10 +74,16 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(isRenewing)
+
+                Button {
+                    showUpdateTokens = true
+                } label: {
+                    Label("Update Tokens", systemImage: "key.horizontal")
+                }
             } header: {
                 Text("Token")
             } footer: {
-                Text("Tokens are automatically renewed on app launch and every 2 hours. When renewed, both the access token and refresh token are replaced with fresh ones and stored in the iOS Keychain.")
+                Text("Tokens are automatically renewed on app launch and every 2 hours. When renewed, both the access token and refresh token are replaced and stored in the iOS Keychain.")
             }
 
             // MARK: - Security
@@ -117,24 +126,37 @@ struct SettingsView: View {
                 Text("About")
             }
 
-            // MARK: - Logout
+            // MARK: - Actions
             Section {
+                Button(role: .destructive) {
+                    showResetConfirm = true
+                } label: {
+                    Label("Reset Connection", systemImage: "arrow.counterclockwise")
+                }
+
                 Button(role: .destructive) {
                     authManager.logout()
                 } label: {
-                    HStack {
-                        Spacer()
-                        Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
-                            .fontWeight(.semibold)
-                        Spacer()
-                    }
+                    Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             } footer: {
-                Text("Removes all stored tokens from the Keychain and returns to the login screen.")
+                Text("Reset clears all stored data and returns to the setup screen where you can enter a new ring and tokens. Log Out keeps your ring but clears tokens.")
             }
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showUpdateTokens) {
+            UpdateTokensSheet()
+                .environmentObject(authManager)
+        }
+        .alert("Reset Connection?", isPresented: $showResetConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                authManager.logout()
+            }
+        } message: {
+            Text("This will clear your ring, tokens, and all stored data. You'll need to set up the connection again from scratch.")
+        }
     }
 
     private var tokenIcon: String {
@@ -152,6 +174,107 @@ struct SettingsView: View {
         case .expired: return .red
         case .failed: return .orange
         case .unknown: return .secondary
+        }
+    }
+}
+
+// MARK: - Update Tokens Sheet
+
+struct UpdateTokensSheet: View {
+    @EnvironmentObject var authManager: AuthenticationManager
+    @Environment(\.dismiss) var dismiss
+    @State private var accessToken = ""
+    @State private var refreshToken = ""
+
+    private var isFormValid: Bool {
+        !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !refreshToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        Text("Ring")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(authManager.ringHost)
+                            .monospaced()
+                    }
+                } header: {
+                    Text("Current Connection")
+                }
+
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Access Token", systemImage: "key")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        SecureField("Paste new access token", text: $accessToken)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Refresh Token", systemImage: "arrow.clockwise")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        SecureField("Paste new refresh token", text: $refreshToken)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                } header: {
+                    Text("New Tokens")
+                } footer: {
+                    Text("Enter new tokens to replace the current ones. The new tokens will be validated before saving.")
+                }
+
+                if let error = authManager.errorMessage {
+                    Section {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+
+                Section {
+                    Button {
+                        Task {
+                            await authManager.updateTokens(
+                                accessToken: accessToken,
+                                refreshToken: refreshToken
+                            )
+                            if authManager.tokenStatus == .valid {
+                                dismiss()
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if authManager.isLoading {
+                                ProgressView()
+                            } else {
+                                Text("Save & Validate")
+                                    .fontWeight(.semibold)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .disabled(!isFormValid || authManager.isLoading)
+                }
+            }
+            .navigationTitle("Update Tokens")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
         }
     }
 }

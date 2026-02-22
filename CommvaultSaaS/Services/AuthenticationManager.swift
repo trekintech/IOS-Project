@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import SwiftUI
 
-/// Manages token storage and automatic renewal.
+/// Manages token storage, ring selection, and automatic renewal.
 /// No username/password login — just access token + refresh token.
 @MainActor
 final class AuthenticationManager: ObservableObject {
@@ -11,6 +11,7 @@ final class AuthenticationManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var lastRenewalDate: Date?
     @Published var tokenStatus: TokenStatus = .unknown
+    @Published var ringNumber: String = ""
 
     enum TokenStatus: String {
         case unknown = "Unknown"
@@ -23,11 +24,11 @@ final class AuthenticationManager: ObservableObject {
     private let keychain = KeychainManager.shared
     private let api = CommvaultAPIService.shared
 
+    var ringHost: String {
+        ringNumber.isEmpty ? "Not configured" : "m\(ringNumber).metallic.io"
+    }
+
     init() {
-        // Load last renewal date from stored value
-        if let stored = keychain.retrieve(for: .apiToken), !stored.isEmpty {
-            lastRenewalDate = nil // Will be set on first successful renewal
-        }
         restoreSession()
     }
 
@@ -35,32 +36,37 @@ final class AuthenticationManager: ObservableObject {
     /// so the app never uses a potentially stale token.
     private func restoreSession() {
         guard let token = keychain.retrieve(for: .apiToken),
-              let _ = keychain.retrieve(for: .refreshToken) else {
+              let _ = keychain.retrieve(for: .refreshToken),
+              let ring = keychain.retrieve(for: .ringEndpoint), !ring.isEmpty else {
             return
         }
 
+        ringNumber = ring
+
         Task {
-            await api.configure(token: token)
+            await api.configure(token: token, ring: ring)
             self.isAuthenticated = true
-            // Immediately renew on launch so the token is always fresh
             await renewToken()
         }
     }
 
-    /// Store access token + refresh token, validate by fetching users.
-    func setupTokens(accessToken: String, refreshToken: String) async {
+    /// Store ring + tokens, validate by fetching users.
+    func setupTokens(ring: String, accessToken: String, refreshToken: String) async {
         isLoading = true
         errorMessage = nil
 
+        let trimmedRing = ring.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAccess = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedRefresh = refreshToken.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        await api.configure(token: trimmedAccess)
+        await api.configure(token: trimmedAccess, ring: trimmedRing)
 
         do {
             let _ = try await api.getUsers()
+            try keychain.save(trimmedRing, for: .ringEndpoint)
             try keychain.save(trimmedAccess, for: .apiToken)
             try keychain.save(trimmedRefresh, for: .refreshToken)
+            self.ringNumber = trimmedRing
             self.isAuthenticated = true
             self.tokenStatus = .valid
             self.lastRenewalDate = Date()
@@ -76,8 +82,34 @@ final class AuthenticationManager: ObservableObject {
         isLoading = false
     }
 
+    /// Update tokens on an existing session (from Settings).
+    func updateTokens(accessToken: String, refreshToken: String) async {
+        isLoading = true
+        errorMessage = nil
+
+        let trimmedAccess = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedRefresh = refreshToken.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        await api.updateToken(trimmedAccess)
+
+        do {
+            let _ = try await api.getUsers()
+            try keychain.save(trimmedAccess, for: .apiToken)
+            try keychain.save(trimmedRefresh, for: .refreshToken)
+            self.tokenStatus = .valid
+            self.lastRenewalDate = Date()
+            self.errorMessage = nil
+        } catch CommvaultAPIError.unauthorized {
+            errorMessage = "Invalid access token."
+            tokenStatus = .expired
+        } catch {
+            errorMessage = "Connection failed: \(error.localizedDescription)"
+        }
+
+        isLoading = false
+    }
+
     /// Force-renew the token and store the new pair in Keychain.
-    /// Called on app launch, before API calls, and from Settings.
     func renewToken() async {
         guard let currentToken = keychain.retrieve(for: .apiToken),
               let refreshToken = keychain.retrieve(for: .refreshToken) else {
@@ -98,25 +130,21 @@ final class AuthenticationManager: ObservableObject {
                 tokenStatus = .renewed
                 lastRenewalDate = Date()
             } else {
-                // API responded but no new tokens — current token may still work
                 tokenStatus = .valid
             }
         } catch {
-            // Renewal failed — token may still work, don't log out yet
             tokenStatus = .failed
         }
     }
 
     /// Renew only if it's been > 2 hours since the last call.
-    /// For use before routine API calls.
     func renewIfNeeded() async {
         let needsRenewal = await api.needsTokenRenewal
         guard needsRenewal else { return }
         await renewToken()
     }
 
-    /// Called by the API service when a 401 is received.
-    /// Attempts to renew and returns true if a fresh token is now available.
+    /// Called when a 401 is received. Attempts renewal, returns true if fresh token available.
     func handleUnauthorized() async -> Bool {
         await renewToken()
         return tokenStatus == .renewed
@@ -128,5 +156,6 @@ final class AuthenticationManager: ObservableObject {
         errorMessage = nil
         tokenStatus = .unknown
         lastRenewalDate = nil
+        ringNumber = ""
     }
 }

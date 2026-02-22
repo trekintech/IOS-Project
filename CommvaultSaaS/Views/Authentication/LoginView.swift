@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthenticationManager
+    @State private var ringNumber = ""
     @State private var accessToken = ""
     @State private var refreshToken = ""
     @State private var showTokenInfo = false
@@ -32,7 +33,7 @@ struct LoginView: View {
                     }
                     .padding(.bottom, 20)
 
-                    // Token Setup Card
+                    // Setup Card
                     VStack(spacing: 20) {
                         HStack {
                             Text("Connect to your environment")
@@ -43,6 +44,49 @@ struct LoginView: View {
                             } label: {
                                 Image(systemName: "info.circle")
                                     .font(.body)
+                            }
+                        }
+
+                        // Ring Number
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Ring Number", systemImage: "server.rack")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            HStack(spacing: 0) {
+                                Text("M")
+                                    .font(.body)
+                                    .fontWeight(.semibold)
+                                    .monospaced()
+                                    .foregroundStyle(CommvaultColors.deepPurple)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 14)
+                                    .background(Color(.systemGray5))
+
+                                TextField("036", text: $ringNumber)
+                                    .keyboardType(.numberPad)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .monospaced()
+                                    .padding()
+                                    .onChange(of: ringNumber) { _, newValue in
+                                        // Only allow digits, max 3
+                                        let filtered = newValue.filter(\.isNumber)
+                                        if filtered.count > 3 {
+                                            ringNumber = String(filtered.prefix(3))
+                                        } else {
+                                            ringNumber = filtered
+                                        }
+                                    }
+                            }
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                            if !ringNumber.isEmpty {
+                                Text("m\(ringNumber).metallic.io")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .monospaced()
                             }
                         }
 
@@ -90,6 +134,7 @@ struct LoginView: View {
                         Button {
                             Task {
                                 await authManager.setupTokens(
+                                    ring: ringNumber,
                                     accessToken: accessToken,
                                     refreshToken: refreshToken
                                 )
@@ -142,8 +187,10 @@ struct LoginView: View {
     }
 
     private var isFormValid: Bool {
-        !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !refreshToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let ringValid = ringNumber.count >= 2 && ringNumber.count <= 3 && ringNumber.allSatisfy(\.isNumber)
+        let accessValid = !accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let refreshValid = !refreshToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return ringValid && accessValid && refreshValid
     }
 }
 
@@ -159,12 +206,12 @@ struct TokenInfoSheet: View {
                         .fontWeight(.bold)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        InfoStep(number: 1, text: "Log into your Commvault Command Center")
-                        InfoStep(number: 2, text: "Go to Manage > Security > Access Tokens")
-                        InfoStep(number: 3, text: "Click 'Add Token' to create a new access token")
-                        InfoStep(number: 4, text: "Set the scope to 'All' for full API access")
+                        InfoStep(number: 1, text: "Find your ring number (e.g. M036) from your Commvault Cloud URL")
+                        InfoStep(number: 2, text: "Log into your Commvault Command Center")
+                        InfoStep(number: 3, text: "Go to Manage > Security > Access Tokens")
+                        InfoStep(number: 4, text: "Click 'Add Token' to create a new access token")
                         InfoStep(number: 5, text: "Copy both the Access Token and Refresh Token")
-                        InfoStep(number: 6, text: "Paste them into this app")
+                        InfoStep(number: 6, text: "Paste the ring number and tokens into this app")
                     }
 
                     HStack(spacing: 8) {
@@ -179,7 +226,7 @@ struct TokenInfoSheet: View {
                 }
                 .padding()
             }
-            .navigationTitle("Token Setup")
+            .navigationTitle("Setup Guide")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
