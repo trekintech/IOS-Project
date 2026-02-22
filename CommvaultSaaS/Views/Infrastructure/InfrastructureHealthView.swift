@@ -188,7 +188,7 @@ struct HealthStatCard: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-        case .needsUpdate:
+        case .needsAttention:
             return LinearGradient(
                 colors: [Color(hex: "5C4B1E"), Color(hex: "B8860B")],
                 startPoint: .topLeading,

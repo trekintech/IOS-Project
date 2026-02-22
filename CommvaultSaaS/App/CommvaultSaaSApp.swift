@@ -21,8 +21,14 @@ struct CommvaultSaaSApp: App {
         navAppearance.backgroundColor = UIColor(CommvaultColors.deepPurple)
         navAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
         navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+
+        // Apply the same appearance to all three display modes so the back
+        // chevron is always the same light tint regardless of scroll position
+        // or whether we're inside a sheet's own NavigationStack.
         UINavigationBar.appearance().standardAppearance = navAppearance
         UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
-        UINavigationBar.appearance().tintColor = .white
+        UINavigationBar.appearance().compactAppearance = navAppearance
+        UINavigationBar.appearance().compactScrollEdgeAppearance = navAppearance
+        UINavigationBar.appearance().tintColor = UIColor(white: 1.0, alpha: 0.75)
     }
 }

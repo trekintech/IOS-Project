@@ -114,10 +114,10 @@ struct ServerRow: View {
 
                 if server.needsUpdate {
                     HStack(spacing: 4) {
-                        Image(systemName: "arrow.down.circle.fill")
+                        Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption2)
                             .foregroundStyle(.orange)
-                        Text("Update available")
+                        Text("Needs Attention")
                             .font(.caption2)
                             .foregroundStyle(.orange)
                     }

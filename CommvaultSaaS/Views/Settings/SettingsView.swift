@@ -197,9 +197,9 @@ struct UpdateTokensSheet: View {
                 Section {
                     HStack {
                         Text("Ring")
-                            .foregroundStyle(.secondary)
                         Spacer()
                         Text(authManager.ringHost)
+                            .foregroundStyle(.secondary)
                             .monospaced()
                     }
                 } header: {
@@ -276,5 +276,6 @@ struct UpdateTokensSheet: View {
                 }
             }
         }
+        .tint(Color(white: 1.0, opacity: 0.75))
     }
 }

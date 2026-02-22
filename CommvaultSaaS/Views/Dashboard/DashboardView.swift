@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 struct DashboardView: View {
     @EnvironmentObject var authManager: AuthenticationManager
@@ -47,7 +48,8 @@ struct DashboardView: View {
                     NavigationLink {
                         UserListView(
                             title: "All Users",
-                            users: viewModel.allUsers
+                            users: viewModel.allUsers,
+                            allowsExport: false
                         )
                     } label: {
                         StatCard(
@@ -67,7 +69,8 @@ struct DashboardView: View {
                     NavigationLink {
                         UserListView(
                             title: "Inactive 6+ Months",
-                            users: viewModel.inactiveSixMonthUsers
+                            users: viewModel.inactiveSixMonthUsers,
+                            allowsExport: true
                         )
                     } label: {
                         StatCard(
@@ -88,7 +91,8 @@ struct DashboardView: View {
                     NavigationLink {
                         UserListView(
                             title: "Inactive 1+ Year",
-                            users: viewModel.inactiveOneYearUsers
+                            users: viewModel.inactiveOneYearUsers,
+                            allowsExport: true
                         )
                     } label: {
                         StatCard(
@@ -109,7 +113,8 @@ struct DashboardView: View {
                     NavigationLink {
                         UserListView(
                             title: "Never Logged In",
-                            users: viewModel.neverLoggedInUsers
+                            users: viewModel.neverLoggedInUsers,
+                            allowsExport: true
                         )
                     } label: {
                         StatCard(
@@ -190,7 +195,6 @@ final class DashboardViewModel: ObservableObject {
             let response = try await api.getUsers()
             self.allUsers = response.users ?? []
         } catch CommvaultAPIError.unauthorized {
-            // Token expired — try to renew and retry once
             let renewed = await authManager.handleUnauthorized()
             if renewed {
                 do {
@@ -222,7 +226,6 @@ struct StatCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Icon circle
             ZStack {
                 Circle()
                     .fill(.white.opacity(0.2))
@@ -245,7 +248,6 @@ struct StatCard: View {
 
             Spacer()
 
-            // Count
             Text("\(count)")
                 .font(.system(size: 40, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
@@ -266,13 +268,15 @@ struct StatCard: View {
 struct UserListView: View {
     let title: String
     let users: [CommvaultUser]
+    var allowsExport: Bool = false
 
     @State private var searchText = ""
+    @State private var showExportOptions = false
+    @State private var shareItems: [Any] = []
+    @State private var showShareSheet = false
 
     private var filteredUsers: [CommvaultUser] {
-        if searchText.isEmpty {
-            return users
-        }
+        if searchText.isEmpty { return users }
         return users.filter {
             $0.displayName.localizedCaseInsensitiveContains(searchText) ||
             ($0.email ?? "").localizedCaseInsensitiveContains(searchText)
@@ -282,7 +286,6 @@ struct UserListView: View {
     var body: some View {
         List(filteredUsers) { user in
             HStack(spacing: 12) {
-                // Avatar circle with initials
                 ZStack {
                     Circle()
                         .fill(CommvaultColors.mediumPurple.opacity(0.2))
@@ -318,13 +321,9 @@ struct UserListView: View {
                 Spacer()
 
                 if user.enabled == true {
-                    Circle()
-                        .fill(.green)
-                        .frame(width: 8, height: 8)
+                    Circle().fill(.green).frame(width: 8, height: 8)
                 } else {
-                    Circle()
-                        .fill(.gray)
-                        .frame(width: 8, height: 8)
+                    Circle().fill(.gray).frame(width: 8, height: 8)
                 }
             }
             .padding(.vertical, 4)
@@ -332,6 +331,196 @@ struct UserListView: View {
         .searchable(text: $searchText, prompt: "Search users")
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if allowsExport && !users.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showExportOptions = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Export Summary", isPresented: $showExportOptions, titleVisibility: .visible) {
+            Button("Export as CSV") {
+                if let url = exportCSV() {
+                    shareItems = [url]
+                    showShareSheet = true
+                }
+            }
+            Button("Export as PDF") {
+                if let url = exportPDF() {
+                    shareItems = [url]
+                    showShareSheet = true
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Choose a format. You can email the file from the share sheet.")
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ActivityView(activityItems: shareItems)
+        }
+    }
+
+    // MARK: - CSV Export
+
+    private func exportCSV() -> URL? {
+        var lines = ["Name,Email,Last Login,Status"]
+        for user in users {
+            let name = csvEscape(user.displayName)
+            let email = csvEscape(user.email ?? "")
+            let lastLogin: String
+            if let date = user.lastLoginDate {
+                let fmt = DateFormatter()
+                fmt.dateStyle = .medium
+                fmt.timeStyle = .none
+                lastLogin = fmt.string(from: date)
+            } else {
+                lastLogin = "Never"
+            }
+            let status = user.enabled == true ? "Active" : "Disabled"
+            lines.append("\(name),\(email),\(lastLogin),\(status)")
+        }
+        let csv = lines.joined(separator: "\n")
+        let fileName = sanitizeFilename(title) + ".csv"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        try? csv.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private func csvEscape(_ value: String) -> String {
+        if value.contains(",") || value.contains("\"") || value.contains("\n") {
+            return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return value
+    }
+
+    // MARK: - PDF Export
+
+    private func exportPDF() -> URL? {
+        let pageWidth: CGFloat = 612
+        let pageHeight: CGFloat = 792
+        let margin: CGFloat = 40
+        let lineHeight: CGFloat = 20
+        let headerHeight: CGFloat = 60
+
+        let pageRect = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+
+        let fileName = sanitizeFilename(title) + ".pdf"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+
+        let dateStr: String = {
+            let f = DateFormatter(); f.dateStyle = .long; f.timeStyle = .none
+            return f.string(from: Date())
+        }()
+
+        try? renderer.writePDF(to: url) { ctx in
+            var yOffset: CGFloat = margin
+            var pageUsersDrawn = 0
+
+            func startNewPage() {
+                ctx.beginPage()
+                yOffset = margin
+
+                // Header bar
+                let headerRect = CGRect(x: 0, y: 0, width: pageWidth, height: headerHeight)
+                UIColor(CommvaultColors.deepPurple).setFill()
+                UIRectFill(headerRect)
+
+                let titleAttrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.boldSystemFont(ofSize: 16),
+                    .foregroundColor: UIColor.white
+                ]
+                let titleStr = NSAttributedString(string: title + " — User Summary", attributes: titleAttrs)
+                titleStr.draw(at: CGPoint(x: margin, y: 20))
+
+                let subtitleAttrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 10),
+                    .foregroundColor: UIColor.white.withAlphaComponent(0.7)
+                ]
+                let subStr = NSAttributedString(string: "Generated \(dateStr)  •  \(users.count) users", attributes: subtitleAttrs)
+                subStr.draw(at: CGPoint(x: margin, y: 40))
+
+                yOffset = headerHeight + 20
+
+                // Column headers
+                drawRow(ctx: ctx, y: yOffset, name: "Name", email: "Email", lastLogin: "Last Login", status: "Status", isHeader: true)
+                yOffset += lineHeight + 6
+
+                // Separator
+                UIColor(CommvaultColors.deepPurple).withAlphaComponent(0.3).setFill()
+                UIRectFill(CGRect(x: margin, y: yOffset, width: pageWidth - margin * 2, height: 1))
+                yOffset += 8
+            }
+
+            startNewPage()
+
+            for user in users {
+                if yOffset + lineHeight > pageHeight - margin {
+                    startNewPage()
+                }
+
+                let lastLogin: String
+                if let date = user.lastLoginDate {
+                    let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none
+                    lastLogin = f.string(from: date)
+                } else {
+                    lastLogin = "Never"
+                }
+                let status = user.enabled == true ? "Active" : "Disabled"
+
+                // Zebra stripe
+                if pageUsersDrawn % 2 == 0 {
+                    UIColor.systemGray6.setFill()
+                    UIRectFill(CGRect(x: margin, y: yOffset - 2, width: pageWidth - margin * 2, height: lineHeight + 4))
+                }
+
+                drawRow(ctx: ctx, y: yOffset,
+                        name: user.displayName,
+                        email: user.email ?? "",
+                        lastLogin: lastLogin,
+                        status: status,
+                        isHeader: false)
+
+                yOffset += lineHeight + 4
+                pageUsersDrawn += 1
+            }
+        }
+
+        return url
+    }
+
+    private func drawRow(ctx: UIGraphicsPDFRendererContext,
+                         y: CGFloat,
+                         name: String, email: String,
+                         lastLogin: String, status: String,
+                         isHeader: Bool) {
+        let margin: CGFloat = 40
+        let pageWidth: CGFloat = 612
+        let usableWidth = pageWidth - margin * 2
+        let col0 = margin
+        let col1 = margin + usableWidth * 0.30
+        let col2 = margin + usableWidth * 0.62
+        let col3 = margin + usableWidth * 0.82
+
+        let font = isHeader
+            ? UIFont.boldSystemFont(ofSize: 10)
+            : UIFont.systemFont(ofSize: 10)
+        let color = isHeader ? UIColor(CommvaultColors.deepPurple) : UIColor.label
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+
+        NSAttributedString(string: name, attributes: attrs).draw(at: CGPoint(x: col0, y: y))
+        NSAttributedString(string: email, attributes: attrs).draw(at: CGPoint(x: col1, y: y))
+        NSAttributedString(string: lastLogin, attributes: attrs).draw(at: CGPoint(x: col2, y: y))
+        NSAttributedString(string: status, attributes: attrs).draw(at: CGPoint(x: col3, y: y))
+    }
+
+    private func sanitizeFilename(_ name: String) -> String {
+        let safe = name.components(separatedBy: .init(charactersIn: "/\\:*?\"<>|")).joined(separator: "-")
+        return safe.isEmpty ? "UserExport" : safe
     }
 
     private func initials(for name: String) -> String {
@@ -341,4 +530,17 @@ struct UserListView: View {
         }
         return String(name.prefix(2)).uppercased()
     }
+}
+
+// MARK: - Share Sheet (UIActivityViewController wrapper)
+
+struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let vc = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

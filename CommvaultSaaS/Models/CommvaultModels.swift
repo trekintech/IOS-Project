@@ -218,8 +218,10 @@ struct CommvaultServer: Codable, Identifiable {
 
     var healthStatus: ServerHealthStatus {
         if isOffline { return .offline }
-        if isOnline && needsUpdate { return .needsUpdate }
-        if isOnline && isUpToDate { return .healthy }
+        // Any server that is explicitly ONLINE but needs an update → needsAttention
+        if isOnline && needsUpdate { return .needsAttention }
+        // Any ONLINE server (regardless of updateState) is healthy
+        if isOnline { return .healthy }
         return .unknown
     }
 
@@ -238,14 +240,14 @@ struct CommvaultServer: Codable, Identifiable {
 
 enum ServerHealthStatus: String, CaseIterable {
     case offline = "Offline"
-    case needsUpdate = "Needs Update"
-    case healthy = "Online"
+    case needsAttention = "Needs Attention"
+    case healthy = "Healthy"
     case unknown = "Unknown"
 
     var color: Color {
         switch self {
         case .offline: return Color(hex: "FF3B30")
-        case .needsUpdate: return Color(hex: "FF9500")
+        case .needsAttention: return Color(hex: "FF9500")
         case .healthy: return Color(hex: "34C759")
         case .unknown: return Color.gray
         }
@@ -254,7 +256,7 @@ enum ServerHealthStatus: String, CaseIterable {
     var icon: String {
         switch self {
         case .offline: return "xmark.circle.fill"
-        case .needsUpdate: return "exclamationmark.triangle.fill"
+        case .needsAttention: return "exclamationmark.triangle.fill"
         case .healthy: return "checkmark.circle.fill"
         case .unknown: return "questionmark.circle"
         }
@@ -263,7 +265,7 @@ enum ServerHealthStatus: String, CaseIterable {
     var sortOrder: Int {
         switch self {
         case .offline: return 0
-        case .needsUpdate: return 1
+        case .needsAttention: return 1
         case .healthy: return 2
         case .unknown: return 3
         }
