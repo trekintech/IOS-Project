@@ -461,9 +461,9 @@ enum CredentialAgeBucket: String, CaseIterable {
 
     var sortOrder: Int {
         switch self {
-        case .overOneYear:     return 0
+        case .overNinetyDays:  return 0
         case .overSixMonths:   return 1
-        case .overNinetyDays:  return 2
+        case .overOneYear:     return 2
         }
     }
 

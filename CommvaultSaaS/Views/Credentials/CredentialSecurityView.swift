@@ -32,15 +32,6 @@ struct CredentialSecurityView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 16) {
-                        // Summary header
-                        HStack {
-                            Text("\(viewModel.filteredCredentials.count) tracked credentials")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-
                         // Bucket cards
                         ForEach(viewModel.bucketGroups, id: \.bucket) { group in
                             NavigationLink {
