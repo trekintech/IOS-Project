@@ -57,7 +57,9 @@ struct CredentialSecurityView: View {
                             }
                         }
 
-                        if viewModel.filteredCredentials.isEmpty {
+                        // If we have credentials but none ended up in buckets,
+                        // show debug info so we can diagnose the field mapping.
+                        if !viewModel.filteredCredentials.isEmpty && viewModel.bucketGroups.isEmpty {
                             VStack(spacing: 8) {
                                 Image(systemName: "checkmark.shield")
                                     .font(.largeTitle)
@@ -67,6 +69,49 @@ struct CredentialSecurityView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .padding(.top, 40)
+                        }
+
+                        if viewModel.filteredCredentials.isEmpty && viewModel.allCredentials.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "key.slash")
+                                    .font(.largeTitle)
+                                    .foregroundStyle(.secondary)
+                                Text("No credentials found")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 40)
+                        }
+
+                        // Debug section — shows when timestamps are missing
+                        if let debug = viewModel.debugInfo {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("API Debug")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(.orange)
+
+                                Text("Total from API: \(viewModel.allCredentials.count)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+
+                                let withTimestamp = viewModel.filteredCredentials.filter { $0.lastModifiedTime != nil }.count
+                                Text("With timestamp: \(withTimestamp) / \(viewModel.filteredCredentials.count)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+
+                                Text("First record JSON keys:")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Text(debug)
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.orange.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                     }
                     .padding()
@@ -112,6 +157,7 @@ final class CredentialSecurityViewModel: ObservableObject {
     @Published var allCredentials: [CommvaultCredential] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var debugInfo: String?
 
     private let api = CommvaultAPIService.shared
 
@@ -131,16 +177,27 @@ final class CredentialSecurityViewModel: ObservableObject {
     func loadCredentials(authManager: AuthenticationManager) async {
         isLoading = true
         errorMessage = nil
+        debugInfo = nil
 
         do {
             let response = try await api.getCredentials()
             self.allCredentials = response.credentialManager ?? []
+
+            // If no timestamps were decoded, fetch raw JSON to show field names
+            let withTimestamp = filteredCredentials.filter { $0.lastModifiedTime != nil }.count
+            if withTimestamp == 0 && !filteredCredentials.isEmpty {
+                await captureDebugInfo()
+            }
         } catch CommvaultAPIError.unauthorized {
             let renewed = await authManager.handleUnauthorized()
             if renewed {
                 do {
                     let response = try await api.getCredentials()
                     self.allCredentials = response.credentialManager ?? []
+                    let withTimestamp = filteredCredentials.filter { $0.lastModifiedTime != nil }.count
+                    if withTimestamp == 0 && !filteredCredentials.isEmpty {
+                        await captureDebugInfo()
+                    }
                 } catch {
                     self.errorMessage = error.localizedDescription
                 }
@@ -152,6 +209,29 @@ final class CredentialSecurityViewModel: ObservableObject {
         }
 
         isLoading = false
+    }
+
+    private func captureDebugInfo() async {
+        do {
+            let rawData = try await api.getCredentialsRaw()
+            if let json = try? JSONSerialization.jsonObject(with: rawData) as? [String: Any],
+               let items = json["credentialManager"] as? [[String: Any]],
+               let first = items.first {
+                // Show top-level keys and their value types
+                let lines = first.sorted(by: { $0.key < $1.key }).map { key, val in
+                    let typeStr: String
+                    if val is [String: Any] { typeStr = "{object}" }
+                    else if val is [Any] { typeStr = "[array]" }
+                    else if val is Int || val is Double { typeStr = "\(val)" }
+                    else if let s = val as? String { typeStr = "\"\(s.prefix(30))\"" }
+                    else { typeStr = String(describing: type(of: val)) }
+                    return "\(key): \(typeStr)"
+                }
+                debugInfo = lines.joined(separator: "\n")
+            }
+        } catch {
+            debugInfo = "Failed to fetch raw: \(error.localizedDescription)"
+        }
     }
 }
 

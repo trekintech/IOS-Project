@@ -53,6 +53,11 @@ actor CommvaultAPIService {
         return try await get(endpoint: "/v4/credential?AllProperties=true")
     }
 
+    /// Returns raw JSON data for the credential endpoint (for debugging structure)
+    func getCredentialsRaw() async throws -> Data {
+        return try await getRaw(endpoint: "/v4/credential?AllProperties=true")
+    }
+
     // MARK: - Servers
 
     func getServers() async throws -> ServersResponse {
@@ -84,6 +89,24 @@ actor CommvaultAPIService {
     }
 
     // MARK: - Network Layer
+
+    private func getRaw(endpoint: String) async throws -> Data {
+        let urlString = baseURL + endpoint
+        guard let url = URL(string: urlString) else {
+            throw CommvaultAPIError.invalidURL(urlString)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.addValue(authToken, forHTTPHeaderField: "Authtoken")
+        request.timeoutInterval = 30
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+        lastCallTime = Date()
+        return data
+    }
 
     private func get<T: Decodable>(endpoint: String) async throws -> T {
         let urlString = baseURL + endpoint
