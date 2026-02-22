@@ -319,12 +319,6 @@ struct UserListView: View {
                 }
 
                 Spacer()
-
-                if user.enabled == true {
-                    Circle().fill(.green).frame(width: 8, height: 8)
-                } else {
-                    Circle().fill(.gray).frame(width: 8, height: 8)
-                }
             }
             .padding(.vertical, 4)
         }
@@ -367,7 +361,7 @@ struct UserListView: View {
     // MARK: - CSV Export
 
     private func exportCSV() -> URL? {
-        var lines = ["Name,Email,Last Login,Status"]
+        var lines = ["Name,Email,Last Login"]
         for user in users {
             let name = csvEscape(user.displayName)
             let email = csvEscape(user.email ?? "")
@@ -380,8 +374,7 @@ struct UserListView: View {
             } else {
                 lastLogin = "Never"
             }
-            let status = user.enabled == true ? "Active" : "Disabled"
-            lines.append("\(name),\(email),\(lastLogin),\(status)")
+            lines.append("\(name),\(email),\(lastLogin)")
         }
         let csv = lines.joined(separator: "\n")
         let fileName = sanitizeFilename(title) + ".csv"
@@ -447,7 +440,7 @@ struct UserListView: View {
                 yOffset = headerHeight + 20
 
                 // Column headers
-                drawRow(ctx: ctx, y: yOffset, name: "Name", email: "Email", lastLogin: "Last Login", status: "Status", isHeader: true)
+                drawRow(ctx: ctx, y: yOffset, name: "Name", email: "Email", lastLogin: "Last Login", isHeader: true)
                 yOffset += lineHeight + 6
 
                 // Separator
@@ -470,7 +463,6 @@ struct UserListView: View {
                 } else {
                     lastLogin = "Never"
                 }
-                let status = user.enabled == true ? "Active" : "Disabled"
 
                 // Zebra stripe
                 if pageUsersDrawn % 2 == 0 {
@@ -482,7 +474,6 @@ struct UserListView: View {
                         name: user.displayName,
                         email: user.email ?? "",
                         lastLogin: lastLogin,
-                        status: status,
                         isHeader: false)
 
                 yOffset += lineHeight + 4
@@ -496,15 +487,14 @@ struct UserListView: View {
     private func drawRow(ctx: UIGraphicsPDFRendererContext,
                          y: CGFloat,
                          name: String, email: String,
-                         lastLogin: String, status: String,
+                         lastLogin: String,
                          isHeader: Bool) {
         let margin: CGFloat = 40
         let pageWidth: CGFloat = 612
         let usableWidth = pageWidth - margin * 2
         let col0 = margin
-        let col1 = margin + usableWidth * 0.30
-        let col2 = margin + usableWidth * 0.62
-        let col3 = margin + usableWidth * 0.82
+        let col1 = margin + usableWidth * 0.38
+        let col2 = margin + usableWidth * 0.72
 
         let font = isHeader
             ? UIFont.boldSystemFont(ofSize: 10)
@@ -515,7 +505,6 @@ struct UserListView: View {
         NSAttributedString(string: name, attributes: attrs).draw(at: CGPoint(x: col0, y: y))
         NSAttributedString(string: email, attributes: attrs).draw(at: CGPoint(x: col1, y: y))
         NSAttributedString(string: lastLogin, attributes: attrs).draw(at: CGPoint(x: col2, y: y))
-        NSAttributedString(string: status, attributes: attrs).draw(at: CGPoint(x: col3, y: y))
     }
 
     private func sanitizeFilename(_ name: String) -> String {
