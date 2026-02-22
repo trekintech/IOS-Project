@@ -345,9 +345,7 @@ struct CommvaultCredential: Codable, Identifiable {
     let lastModifiedTime: TimeInterval?
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, accountType, vendorType, authType
-        // Try every common Commvault timestamp field name
-        case lastModifiedTime, modifiedTime, lastModified, createdTime
+        case id, name, accountType, vendorType, authType, lastModifiedTime
     }
 
     init(from decoder: Decoder) throws {
@@ -358,21 +356,17 @@ struct CommvaultCredential: Codable, Identifiable {
         vendorType = try container.decodeIfPresent(String.self, forKey: .vendorType)
         authType = try container.decodeIfPresent(String.self, forKey: .authType)
 
-        // Try multiple timestamp field names in priority order
-        let timestampKeys: [CodingKeys] = [.lastModifiedTime, .modifiedTime, .lastModified, .createdTime]
-        var resolved: TimeInterval? = nil
-        for key in timestampKeys {
-            if resolved != nil { break }
-            if let intVal = try? container.decodeIfPresent(Int.self, forKey: key) {
-                resolved = TimeInterval(intVal)
-            } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: key) {
-                resolved = doubleVal
-            } else if let strVal = try? container.decodeIfPresent(String.self, forKey: key),
-                      let parsed = Double(strVal) {
-                resolved = parsed
-            }
+        // API returns lastModifiedTime as a String (Unix epoch seconds)
+        if let intVal = try? container.decodeIfPresent(Int.self, forKey: .lastModifiedTime) {
+            lastModifiedTime = TimeInterval(intVal)
+        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .lastModifiedTime) {
+            lastModifiedTime = doubleVal
+        } else if let strVal = try? container.decodeIfPresent(String.self, forKey: .lastModifiedTime),
+                  let parsed = Double(strVal) {
+            lastModifiedTime = parsed
+        } else {
+            lastModifiedTime = nil
         }
-        lastModifiedTime = resolved
     }
 
     // MARK: - Computed
