@@ -400,14 +400,19 @@ struct CommvaultCredential: Codable, Identifiable {
         return nil
     }
 
-    /// The type string used for filtering — prefers accountType, falls back to vendorType
-    var effectiveType: String {
-        (accountType ?? vendorType ?? "").uppercased()
-    }
-
-    /// Whether this credential matches the allow-list of tracked types
+    /// Whether this credential matches the allow-list of tracked types.
+    /// Checks both accountType and vendorType; also handles API values
+    /// that append a `_TYPE` suffix (e.g. `MICROSOFT_AZURE_TYPE`).
     var isTrackedType: Bool {
-        CommvaultCredential.trackedTypes.contains(effectiveType)
+        let candidates = [vendorType, accountType].compactMap { $0?.uppercased() }
+        for t in candidates {
+            if CommvaultCredential.trackedTypes.contains(t) { return true }
+            if t.hasSuffix("_TYPE") {
+                let stripped = String(t.dropLast(5)) // remove "_TYPE"
+                if CommvaultCredential.trackedTypes.contains(stripped) { return true }
+            }
+        }
+        return false
     }
 
     // MARK: - Allow-list
