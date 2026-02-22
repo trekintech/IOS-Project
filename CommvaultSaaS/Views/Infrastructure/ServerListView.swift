@@ -96,7 +96,7 @@ struct ServerRow: View {
                     )
                 }
 
-                if let vendor = server.cloudVendor, !vendor.isEmpty {
+                if let vendor = server.additionalProperties?.vendorType, !vendor.isEmpty {
                     DetailRow(
                         icon: "cloud",
                         label: "Cloud",
@@ -109,14 +109,6 @@ struct ServerRow: View {
                         icon: "location",
                         label: "Region",
                         value: region
-                    )
-                }
-
-                if let lastBackupDate = server.lastBackupDate {
-                    DetailRow(
-                        icon: "clock",
-                        label: "Last Backup",
-                        value: lastBackupDate.formatted(.dateTime.month().day().year())
                     )
                 }
 
