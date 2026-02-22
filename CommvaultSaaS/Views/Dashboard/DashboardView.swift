@@ -135,29 +135,30 @@ struct DashboardView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        authManager.logout()
-                    } label: {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
                         Task {
                             await authManager.renewIfNeeded()
-                            await viewModel.loadUsers()
+                            await viewModel.loadUsers(authManager: authManager)
                         }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SettingsView()
+                            .environmentObject(authManager)
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
             }
             .refreshable {
                 await authManager.renewIfNeeded()
-                await viewModel.loadUsers()
+                await viewModel.loadUsers(authManager: authManager)
             }
             .task {
                 await authManager.renewIfNeeded()
-                await viewModel.loadUsers()
+                await viewModel.loadUsers(authManager: authManager)
             }
         }
     }
@@ -190,13 +191,26 @@ final class DashboardViewModel: ObservableObject {
     }
     var neverLoggedInCount: Int { neverLoggedInUsers.count }
 
-    func loadUsers() async {
+    func loadUsers(authManager: AuthenticationManager) async {
         isLoading = true
         errorMessage = nil
 
         do {
             let response = try await api.getUsers()
             self.allUsers = response.users ?? []
+        } catch CommvaultAPIError.unauthorized {
+            // Token expired — try to renew and retry once
+            let renewed = await authManager.handleUnauthorized()
+            if renewed {
+                do {
+                    let response = try await api.getUsers()
+                    self.allUsers = response.users ?? []
+                } catch {
+                    self.errorMessage = error.localizedDescription
+                }
+            } else {
+                self.errorMessage = "Session expired. Please log out and re-authenticate."
+            }
         } catch {
             self.errorMessage = error.localizedDescription
         }
